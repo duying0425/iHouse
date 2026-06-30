@@ -1,0 +1,200 @@
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { ArrowRight, Boxes, Download, Search, Settings, Sparkles } from "lucide-react";
+import TopBar from "@/components/TopBar";
+import FloorPlan from "@/components/FloorPlan";
+import { useHomeStore } from "@/store";
+import { countItems } from "@/data/seed";
+import { CATEGORIES } from "@/types";
+
+export default function HomePage() {
+  const navigate = useNavigate();
+  const { title, subtitle, areas, floorPlanImage } = useHomeStore();
+  const [hoverArea, setHoverArea] = useState<string | undefined>();
+
+  const totalItems = useMemo(() => countItems(areas), [areas]);
+  const totalAreas = areas.length;
+
+  return (
+    <div className="min-h-screen">
+      <TopBar title="居所图鉴" subtitle={subtitle} />
+
+      {/* Hero 杂志式标题 */}
+      <section className="border-b border-line bg-cream/60">
+        <div className="container max-w-6xl py-10">
+          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+            <div className="max-w-2xl animate-fadeUp">
+              <span className="inline-flex items-center gap-1.5 text-2xs uppercase tracking-[0.2em] text-clay-500">
+                <Sparkles size={12} /> Home Atlas
+              </span>
+              <h1 className="mt-3 font-serif text-4xl font-semibold leading-tight text-ink md:text-5xl">
+                {title}
+              </h1>
+              <p className="mt-3 text-sm text-ink/55">
+                一张户型图，串联起每个区域的设施与物品。{subtitle}
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-2">
+                <Link to="/search" className="btn-primary">
+                  <Search size={16} /> 开始检索
+                </Link>
+                <Link to="/export" className="btn-secondary">
+                  <Download size={16} /> 导出 PDF
+                </Link>
+              </div>
+            </div>
+            {/* 数据徽章 */}
+            <div className="flex shrink-0 gap-6 border-l border-line pl-6 md:flex-col md:gap-3 md:border-l-0 md:border-t md:border-t-0 md:pl-0">
+              <Stat label="区域" value={totalAreas} suffix="个" />
+              <Stat label="物品" value={totalItems} suffix="件" />
+              <Stat label="分类" value={CATEGORIES.length} suffix="类" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* 户型图主体 */}
+      <main className="container max-w-6xl py-10 animate-fadeIn">
+        <SectionHeader
+          eyebrow="01 · Floor Plan"
+          title="户型平面总览"
+          desc="点击图上的序号锚点进入对应区域，查看区域总图、设施图与物品清单。"
+        />
+
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+          {/* 户型图 */}
+          <div className="card overflow-hidden p-4 md:p-6">
+            <FloorPlan
+              areas={areas}
+              floorPlanImage={floorPlanImage}
+              highlightAreaId={hoverArea}
+              onAreaClick={(id) => navigate(`/area/${id}`)}
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-3 text-2xs text-ink/45">
+              <span>● 序号锚点：区域入口，点击进入</span>
+              <span className="ml-auto">悬停右侧区域卡片可在图上高亮</span>
+            </div>
+          </div>
+
+          {/* 区域索引 */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-serif text-sm font-semibold text-ink">
+                区域索引
+              </h3>
+              <span className="text-2xs text-ink/45">{totalAreas} 个区域</span>
+            </div>
+            <div className="flex flex-col gap-2.5">
+              {areas.map((a, idx) => (
+                <button
+                  key={a.id}
+                  onMouseEnter={() => setHoverArea(a.id)}
+                  onMouseLeave={() => setHoverArea(undefined)}
+                  onClick={() => navigate(`/area/${a.id}`)}
+                  className="card group flex items-center gap-3 p-3 text-left hover:-translate-y-0.5 hover:shadow-cardHover"
+                >
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-moss font-display text-sm font-semibold text-cream">
+                    {idx + 1}
+                  </span>
+                  {a.images[0]?.url ? (
+                    <img
+                      src={a.images[0].url}
+                      alt={a.name}
+                      loading="lazy"
+                      className="h-12 w-16 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-12 w-16 shrink-0 items-center justify-center rounded bg-clay-50 text-2xs text-ink/40">
+                      无图
+                    </span>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-serif text-sm font-semibold text-ink">
+                      {a.name}
+                    </p>
+                    <p className="truncate text-2xs text-ink/50">
+                      {a.items.length} 件物品 · {a.description}
+                    </p>
+                  </div>
+                  <ArrowRight
+                    size={16}
+                    className="shrink-0 text-ink/30 transition-transform group-hover:translate-x-0.5 group-hover:text-clay-500"
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* 快捷操作 */}
+            <div className="mt-2 grid grid-cols-3 gap-2.5">
+              <Link
+                to="/setup"
+                className="card flex flex-col items-start gap-1 p-3 hover:-translate-y-0.5 hover:shadow-cardHover"
+              >
+                <Settings size={16} className="text-clay-500" />
+                <span className="text-xs font-medium text-ink">户型设置</span>
+                <span className="text-2xs text-ink/45">导入图/划区域</span>
+              </Link>
+              <Link
+                to="/search"
+                className="card flex flex-col items-start gap-1 p-3 hover:-translate-y-0.5 hover:shadow-cardHover"
+              >
+                <Search size={16} className="text-clay-500" />
+                <span className="text-xs font-medium text-ink">检索物品</span>
+                <span className="text-2xs text-ink/45">关键词/分类/品牌</span>
+              </Link>
+              <Link
+                to="/export"
+                className="card flex flex-col items-start gap-1 p-3 hover:-translate-y-0.5 hover:shadow-cardHover"
+              >
+                <Boxes size={16} className="text-moss" />
+                <span className="text-xs font-medium text-ink">导出图鉴</span>
+                <span className="text-2xs text-ink/45">PDF 打印装订</span>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  suffix,
+}: {
+  label: string;
+  value: number;
+  suffix: string;
+}) {
+  return (
+    <div>
+      <div className="font-display text-3xl font-semibold text-clay-500">
+        {String(value).padStart(2, "0")}
+        <span className="ml-0.5 text-sm font-normal text-ink/40">{suffix}</span>
+      </div>
+      <div className="text-2xs uppercase tracking-wider text-ink/45">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  desc,
+}: {
+  eyebrow: string;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="font-display text-2xs uppercase tracking-[0.2em] text-clay-500">
+        {eyebrow}
+      </span>
+      <h2 className="font-serif text-2xl font-semibold text-ink">{title}</h2>
+      <p className="text-sm text-ink/55">{desc}</p>
+    </div>
+  );
+}

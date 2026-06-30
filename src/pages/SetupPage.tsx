@@ -1,0 +1,617 @@
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  ChevronRight,
+  Download,
+  GripVertical,
+  ImageUp,
+  Images,
+  Loader2,
+  Plus,
+  RotateCcw,
+  Save,
+  Settings2,
+  Trash2,
+  Upload,
+  UploadCloud,
+  X,
+} from "lucide-react";
+import PageLayout from "@/components/PageLayout";
+import FloorPlan, { BUILTIN_FLOORPLAN } from "@/components/FloorPlan";
+import EmptyState from "@/components/Empty";
+import { useHomeStore } from "@/store";
+import { CATEGORIES } from "@/types";
+import { compressImage } from "@/utils/compressImage";
+import { cn } from "@/lib/utils";
+
+export default function SetupPage() {
+  const {
+    title,
+    floorPlanImage,
+    areas,
+    setFloorPlanImage,
+    setHomeTitle,
+    addArea,
+    updateArea,
+    removeArea,
+    updateAreaPos,
+    addAreaImage,
+    updateAreaImage,
+    removeAreaImage,
+    startBlank,
+    resetDemo,
+    compressExistingImages,
+    exportData,
+    importData,
+  } = useHomeStore();
+
+  const fileRef = useRef<HTMLInputElement>(null);
+  const importRef = useRef<HTMLInputElement>(null);
+  const [newName, setNewName] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [compressing, setCompressing] = useState(false);
+  const [compressResult, setCompressResult] = useState<string | null>(null);
+  const [importHint, setImportHint] = useState<string | null>(null);
+
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${bytes} B`;
+  };
+
+  const handleCompress = async () => {
+    if (compressing) return;
+    setCompressing(true);
+    setCompressResult(null);
+    try {
+      const { before, after } = await compressExistingImages();
+      if (before === 0) {
+        setCompressResult("没有需要压缩的本地图片");
+      } else {
+        const saved = before - after;
+        const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
+        setCompressResult(
+          `已压缩：${formatSize(before)} → ${formatSize(after)}，节省 ${formatSize(saved)}（${pct}%）`
+        );
+      }
+    } catch (e) {
+      setCompressResult("压缩失败：" + (e instanceof Error ? e.message : "未知错误"));
+    } finally {
+      setCompressing(false);
+    }
+  };
+
+  const handleExport = () => {
+    const json = exportData();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `iHouse-backup-${ts}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFile = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        importData(String(reader.result));
+        setImportHint("导入成功");
+      } catch (e) {
+        setImportHint("导入失败：" + (e instanceof Error ? e.message : "JSON 格式有误"));
+      }
+      window.setTimeout(() => setImportHint(null), 3000);
+    };
+    reader.readAsText(file);
+  };
+
+  const isImageMode = !!floorPlanImage && floorPlanImage !== BUILTIN_FLOORPLAN;
+  const hasAreas = areas.length > 0;
+
+  const handleUpload = async (file?: File) => {
+    if (!file) return;
+    try {
+      const url = await compressImage(file, 2000, 0.85);
+      setFloorPlanImage(url);
+    } catch {
+      // 压缩失败则回退直接读
+      const reader = new FileReader();
+      reader.onload = () => setFloorPlanImage(String(reader.result));
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleAdd = () => {
+    const name = newName.trim();
+    if (!name) return;
+    const area = addArea({
+      name,
+      floorPlanPos: { x: 50, y: 50 },
+      images: [],
+      description: `${name}区域`,
+    });
+    setNewName("");
+    // 新建区域后自动展开图片管理
+    setExpandedId(area.id);
+  };
+
+  const startEdit = (id: string, name: string) => {
+    setEditingId(id);
+    setEditName(name);
+  };
+
+  const commitEdit = () => {
+    if (editingId && editName.trim()) {
+      updateArea(editingId, { name: editName.trim() });
+    }
+    setEditingId(null);
+    setEditName("");
+  };
+
+  return (
+    <PageLayout
+      title="户型设置"
+      subtitle="导入户型图 · 划分区域 · 管理区域图片"
+      showActions={false}
+    >
+      <nav className="mb-5 flex items-center gap-1 text-2xs text-ink/45">
+        <Link to="/" className="hover:text-clay-500">
+          居所图鉴
+        </Link>
+        <ChevronRight size={12} />
+        <span className="text-ink/70">户型设置</span>
+      </nav>
+
+      {/* 步骤说明 */}
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <Step n={1} title="导入户型图" desc="上传一张户型图作为整屋底图" />
+        <Step n={2} title="添加区域" desc="如卧室1、卧室2、卫生间1/2/3" />
+        <Step
+          n={3}
+          title="区域图片"
+          desc="为每个区域上传 1 张或多张图片（总图/设施图/某面墙等），物品位置将标在这些图上"
+        />
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+        {/* 左：户型图画布 */}
+        <div className="space-y-4">
+          {/* 户型图标题编辑 */}
+          <div className="card flex flex-wrap items-center gap-3 p-4">
+            <label className="flex flex-1 flex-col gap-0.5">
+              <span className="text-2xs uppercase tracking-wider text-ink/45">
+                图鉴标题
+              </span>
+              <input
+                value={title}
+                onChange={(e) => setHomeTitle(e.target.value)}
+                className="field"
+                placeholder="如：城南·溪岸花园 3-2-1801"
+              />
+            </label>
+            <div className="flex gap-2">
+              <button onClick={startBlank} className="btn-secondary">
+                <X size={15} /> 清空重来
+              </button>
+              <button
+                onClick={() => {
+                  if (confirm("重置为内置示例数据？当前自定义内容将丢失。")) {
+                    resetDemo();
+                  }
+                }}
+                className="btn-ghost"
+              >
+                <RotateCcw size={15} /> 恢复示例
+              </button>
+            </div>
+          </div>
+
+          {/* 户型图上传 + 画布 */}
+          <div className="card overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+              <h3 className="flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
+                <Settings2 size={15} className="text-clay-500" /> 户型图
+              </h3>
+              <div className="flex items-center gap-2">
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => handleUpload(e.target.files?.[0])}
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="btn-primary"
+                >
+                  <Upload size={15} /> 上传户型图
+                </button>
+                {!isImageMode && (
+                  <span className="text-2xs text-ink/45">当前：内置示例图</span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4">
+              {hasAreas || isImageMode ? (
+                <FloorPlan
+                  areas={areas}
+                  floorPlanImage={floorPlanImage}
+                  editable
+                  onAreaMove={updateAreaPos}
+                  showAreaAnchors
+                />
+              ) : (
+                <EmptyState
+                  icon={<ImageUp size={22} />}
+                  title="还没有户型图"
+                  description="上传一张户型图图片，然后在右侧添加区域。"
+                  action={
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      className="btn-primary"
+                    >
+                      <Upload size={16} /> 上传户型图
+                    </button>
+                  }
+                />
+              )}
+              <p className="mt-3 text-2xs text-ink/45">
+                {isImageMode
+                  ? "拖拽图上的序号锚点到对应区域位置；锚点会自动保存。"
+                  : "上传图片后将进入拖拽模式；内置示例图下也可拖拽锚点调整位置。"}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* 右：区域管理 */}
+        <aside className="lg:sticky lg:top-24 lg:self-start space-y-4 lg:max-h-[calc(100vh-7rem)] lg:overflow-y-auto lg:pr-1">
+          {/* 新增区域 */}
+          <div className="card p-4">
+            <h3 className="mb-3 flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
+              <Plus size={15} className="text-clay-500" /> 添加区域
+            </h3>
+            <div className="flex gap-2">
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                placeholder="如：卧室1、卫生间2"
+                className="field flex-1"
+              />
+              <button
+                onClick={handleAdd}
+                disabled={!newName.trim()}
+                className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <Plus size={15} />
+              </button>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {["入户玄关", "主卧", "次卧", "客厅", "餐厅", "厨房", "卫生间1", "卫生间2", "阳台"].map(
+                (n) => (
+                  <button
+                    key={n}
+                    onClick={() => {
+                      const area = addArea({
+                        name: n,
+                        floorPlanPos: { x: 50, y: 50 },
+                        images: [],
+                        description: `${n}区域`,
+                      });
+                      setExpandedId(area.id);
+                    }}
+                    className="chip cursor-pointer hover:chip-active"
+                  >
+                    + {n}
+                  </button>
+                )
+              )}
+            </div>
+          </div>
+
+          {/* 区域列表 + 图片管理 */}
+          <div className="card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
+                <GripVertical size={15} className="text-moss" /> 区域与图片
+              </h3>
+              <span className="text-2xs text-ink/45">{areas.length} 个</span>
+            </div>
+
+            {areas.length === 0 ? (
+              <p className="py-6 text-center text-xs text-ink/40">
+                暂无区域，请在上方添加
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {areas.map((a, idx) => {
+                  const expanded = expandedId === a.id;
+                  return (
+                    <li
+                      key={a.id}
+                      className="rounded border border-line bg-cream"
+                    >
+                      {/* 区域行 */}
+                      <div className="flex items-center gap-2 px-2.5 py-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-moss text-[10px] font-semibold text-cream">
+                          {idx + 1}
+                        </span>
+                        {editingId === a.id ? (
+                          <input
+                            autoFocus
+                            value={editName}
+                            onChange={(e) => setEditName(e.target.value)}
+                            onBlur={commitEdit}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") commitEdit();
+                              if (e.key === "Escape") setEditingId(null);
+                            }}
+                            className="field flex-1 py-1"
+                          />
+                        ) : (
+                          <button
+                            onClick={() => startEdit(a.id, a.name)}
+                            className="flex-1 truncate text-left text-sm text-ink hover:text-clay-600"
+                          >
+                            {a.name}
+                          </button>
+                        )}
+                        <span className="shrink-0 text-2xs text-ink/40">
+                          {a.items.length} 件 · {a.images.length} 图
+                        </span>
+                        <button
+                          onClick={() => setExpandedId(expanded ? null : a.id)}
+                          className={cn(
+                            "shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors",
+                            expanded
+                              ? "bg-clay-500 text-cream"
+                              : "text-clay-600 hover:bg-clay-100"
+                          )}
+                          aria-label="展开图片管理"
+                        >
+                          <Images size={13} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (
+                              confirm(
+                                `删除区域「${a.name}」及其下 ${a.items.length} 件物品？`
+                              )
+                            ) {
+                              removeArea(a.id);
+                            }
+                          }}
+                          className="shrink-0 text-ink/30 transition-colors hover:text-ochre"
+                          aria-label="删除区域"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+
+                      {/* 图片管理面板 */}
+                      {expanded && (
+                        <div className="border-t border-line bg-paper/60 p-2.5">
+                          <AreaImagesEditor
+                            images={a.images}
+                            onAdd={(img) => addAreaImage(a.id, img)}
+                            onUpdate={(imageId, patch) =>
+                              updateAreaImage(a.id, imageId, patch)
+                            }
+                            onRemove={(imageId) =>
+                              removeAreaImage(a.id, imageId)
+                            }
+                          />
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          {/* 分类图例 */}
+          <div className="card p-4">
+            <h3 className="mb-2 font-serif text-sm font-semibold text-ink">
+              物品分类
+            </h3>
+            <div className="flex flex-wrap gap-1.5">
+              {CATEGORIES.map((c) => (
+                <span key={c} className="chip">
+                  {c}
+                </span>
+              ))}
+            </div>
+            <p className="mt-2 text-2xs text-ink/45">
+              区域与图片设置完成后，到各区域页录入物品时会在区域图上点选位置。
+            </p>
+          </div>
+
+          {/* 数据维护：压缩已有图片 */}
+          <div className="card p-4">
+            <h3 className="font-serif text-sm font-semibold text-ink">
+              数据维护
+            </h3>
+            <p className="mt-1.5 text-2xs text-ink/55">
+              对已保存的户型图、区域图、物品照片统一做一次压缩（最长边≤2000/1600/1200px，JPEG 0.82）。只处理本地上传的 base64 图片，远程图片不受影响。
+            </p>
+            <button
+              onClick={handleCompress}
+              disabled={compressing}
+              className="btn-secondary mt-3 w-full disabled:opacity-50"
+            >
+              {compressing ? (
+                <>
+                  <Loader2 size={14} className="animate-spin" /> 压缩中…
+                </>
+              ) : (
+                <>
+                  <ImageUp size={14} /> 压缩已有图片
+                </>
+              )}
+            </button>
+            {compressResult && (
+              <p className="mt-2 text-2xs text-moss">{compressResult}</p>
+            )}
+
+            <div className="my-3 border-t border-line" />
+
+            <p className="text-2xs text-ink/55">
+              导出当前全部数据为 JSON 备份文件（含户型图、区域、物品、图片），可换设备/浏览器导入恢复。
+            </p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button onClick={handleExport} className="btn-secondary">
+                <Download size={14} /> 导出备份
+              </button>
+              <button
+                onClick={() => importRef.current?.click()}
+                className="btn-secondary"
+              >
+                <UploadCloud size={14} /> 导入备份
+              </button>
+            </div>
+            <input
+              ref={importRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => {
+                handleImportFile(e.target.files?.[0]);
+                if (e.target) e.target.value = "";
+              }}
+            />
+            {importHint && (
+              <p className="mt-2 text-2xs text-moss">{importHint}</p>
+            )}
+          </div>
+
+          {/* 自动保存提示 + 返回 */}
+          <div className="card p-4">
+            <div className="flex items-center gap-2 text-2xs text-moss">
+              <Save size={13} />
+              <span>所有改动已自动保存到本地</span>
+            </div>
+            <p className="mt-1.5 text-2xs text-ink/45">
+              无需手动保存。可直接离开本页或点下方返回首页。
+            </p>
+            <Link to="/" className="btn-primary mt-3 w-full">
+              <ArrowLeft size={15} /> 返回首页
+            </Link>
+          </div>
+        </aside>
+      </div>
+    </PageLayout>
+  );
+}
+
+/** 单个区域的图片增删改面板 */
+function AreaImagesEditor({
+  images,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  images: { id: string; url: string; label?: string }[];
+  onAdd: (img: { url: string; label?: string }) => void;
+  onUpdate: (imageId: string, patch: { label?: string }) => void;
+  onRemove: (imageId: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // 支持一次选择多个文件，全部压缩完后再按原始顺序添加（避免异步乱序）
+  const handleFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (list.length === 0) return;
+    const baseIdx = images.length;
+
+    // 并行压缩，但按输入顺序等待全部完成
+    const urls = await Promise.all(
+      list.map((f) => compressImage(f, 1600, 0.82).catch(() => null))
+    );
+    urls.forEach((url, i) => {
+      if (url) onAdd({ url, label: `图 ${baseIdx + i + 1}` });
+    });
+  };
+
+  return (
+    <div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          // 允许连续上传同一文件
+          if (e.target) e.target.value = "";
+        }}
+      />
+      {images.length === 0 ? (
+        <p className="py-3 text-center text-2xs text-ink/45">
+          暂无图片，请上传区域图（可多选）
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {images.map((img) => (
+            <li
+              key={img.id}
+              className="flex items-center gap-2 rounded border border-line bg-cream p-1.5"
+            >
+              <img
+                src={img.url}
+                alt={img.label || ""}
+                className="h-10 w-14 shrink-0 rounded object-cover"
+              />
+              <input
+                value={img.label || ""}
+                onChange={(e) => onUpdate(img.id, { label: e.target.value })}
+                placeholder="标签：如 总图/设施图/东墙"
+                className="field flex-1 py-0.5 text-2xs"
+              />
+              <button
+                onClick={() => onRemove(img.id)}
+                className="shrink-0 text-ink/30 hover:text-ochre"
+                aria-label="删除图片"
+              >
+                <Trash2 size={13} />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        onClick={() => fileRef.current?.click()}
+        className="mt-2 w-full rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500"
+      >
+        <Upload size={12} className="mr-1 inline" /> 上传区域图片（可多选）
+      </button>
+      <p className="mt-1.5 text-center text-2xs text-ink/35">
+        支持一次选择多张：总图、设施图、某面墙等，已自动保存
+      </p>
+    </div>
+  );
+}
+
+function Step({ n, title, desc }: { n: number; title: string; desc: string }) {
+  return (
+    <div className="card flex items-start gap-3 p-3">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-clay-500 font-display text-sm font-semibold text-cream">
+        {n}
+      </span>
+      <div>
+        <p className="font-serif text-sm font-semibold text-ink">{title}</p>
+        <p className="text-2xs text-ink/55">{desc}</p>
+      </div>
+    </div>
+  );
+}

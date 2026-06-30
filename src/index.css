@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: "Noto Sans SC", -apple-system, BlinkMacSystemFont, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  color: #1f1b16;
+  background-color: #f5f1ea;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  border-color: #e0d8cc;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  /* 纸张噪点纹理 */
+  background-color: #f5f1ea;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(168, 107, 60, 0.04), transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(61, 90, 74, 0.04), transparent 40%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+@layer components {
+  /* 杂志式标题字距 */
+  .font-display {
+    font-family: "Fraunces", "Noto Serif SC", serif;
+    font-optical-sizing: auto;
+  }
+
+  /* 主按钮 */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded px-5 py-2.5 text-sm font-medium text-cream bg-clay-500 transition-all hover:bg-clay-600 active:scale-[0.98];
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded border border-line bg-cream px-5 py-2.5 text-sm font-medium text-ink transition-all hover:border-clay-300 hover:text-clay-600 active:scale-[0.98];
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded px-3 py-2 text-sm text-ink/70 transition-colors hover:bg-clay-50 hover:text-clay-600;
+  }
+
+  /* 输入框 */
+  .field {
+    @apply w-full border-0 border-b border-line bg-transparent py-2 text-sm text-ink placeholder:text-ink/30 focus:border-clay-400 focus:outline-none focus:ring-0 transition-colors;
+  }
+
+  /* 卡片 */
+  .card {
+    @apply rounded-lg border border-line bg-cream shadow-card transition-all;
+  }
+
+  /* 标签 */
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full border border-line px-2.5 py-0.5 text-2xs font-medium text-ink/70 bg-cream;
+  }
+  .chip-active {
+    @apply border-clay-400 bg-clay-50 text-clay-700;
+  }
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #d0c4b3;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #b97e4f;
+}
+
+/* 脉冲锚点 */
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: pulseRing 2s ease-out infinite;
+}
