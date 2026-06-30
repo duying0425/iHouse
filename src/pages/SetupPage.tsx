@@ -7,7 +7,6 @@ import {
   GripVertical,
   ImageUp,
   Images,
-  Loader2,
   Plus,
   RotateCcw,
   Save,
@@ -41,7 +40,6 @@ export default function SetupPage() {
     removeAreaImage,
     startBlank,
     resetDemo,
-    compressExistingImages,
     exportData,
     importData,
   } = useHomeStore();
@@ -52,37 +50,7 @@ export default function SetupPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [compressing, setCompressing] = useState(false);
-  const [compressResult, setCompressResult] = useState<string | null>(null);
   const [importHint, setImportHint] = useState<string | null>(null);
-
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-    if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${bytes} B`;
-  };
-
-  const handleCompress = async () => {
-    if (compressing) return;
-    setCompressing(true);
-    setCompressResult(null);
-    try {
-      const { before, after } = await compressExistingImages();
-      if (before === 0) {
-        setCompressResult("没有需要压缩的本地图片");
-      } else {
-        const saved = before - after;
-        const pct = before > 0 ? Math.round((saved / before) * 100) : 0;
-        setCompressResult(
-          `已压缩：${formatSize(before)} → ${formatSize(after)}，节省 ${formatSize(saved)}（${pct}%）`
-        );
-      }
-    } catch (e) {
-      setCompressResult("压缩失败：" + (e instanceof Error ? e.message : "未知错误"));
-    } finally {
-      setCompressing(false);
-    }
-  };
 
   const handleExport = () => {
     const json = exportData();
@@ -435,36 +403,12 @@ export default function SetupPage() {
             </p>
           </div>
 
-          {/* 数据维护：压缩已有图片 */}
+          {/* 数据维护：导出 / 导入 */}
           <div className="card p-4">
             <h3 className="font-serif text-sm font-semibold text-ink">
               数据维护
             </h3>
             <p className="mt-1.5 text-2xs text-ink/55">
-              对已保存的户型图、区域图、物品照片统一做一次压缩（最长边≤2000/1600/1200px，JPEG 0.82）。只处理本地上传的 base64 图片，远程图片不受影响。
-            </p>
-            <button
-              onClick={handleCompress}
-              disabled={compressing}
-              className="btn-secondary mt-3 w-full disabled:opacity-50"
-            >
-              {compressing ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" /> 压缩中…
-                </>
-              ) : (
-                <>
-                  <ImageUp size={14} /> 压缩已有图片
-                </>
-              )}
-            </button>
-            {compressResult && (
-              <p className="mt-2 text-2xs text-moss">{compressResult}</p>
-            )}
-
-            <div className="my-3 border-t border-line" />
-
-            <p className="text-2xs text-ink/55">
               导出当前全部数据为 JSON 备份文件（含户型图、区域、物品、图片），可换设备/浏览器导入恢复。
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">

@@ -10,7 +10,6 @@ import type {
   SearchResult,
 } from "@/types";
 import { cloneSeed, collectBrands, genId } from "@/data/seed";
-import { compressImage } from "@/utils/compressImage";
 
 /**
  * 基于 IndexedDB 的持久化存储。
@@ -124,12 +123,6 @@ interface HomeState extends Home {
   startBlank: () => void;
 
   resetDemo: () => void;
-
-  /**
-   * 清洗已有数据：把所有 base64 图片重新压缩一遍。
-   * 返回处理前后的总字节数，便于展示效果。
-   */
-  compressExistingImages: () => Promise<{ before: number; after: number }>;
 
   /** 导出全部数据为 JSON 字符串 */
   exportData: () => string;
@@ -338,128 +331,6 @@ export const useHomeStore = create<HomeState>()(
 
       resetDemo: () => {
         set({ ...cloneSeed() });
-      },
-
-      compressExistingImages: async () => {
-        const state = get();
-        // 统计字节数（base64 长度近似）
-        const byteLen = (s?: string) => (s ? Math.round(s.length * 0.75) : 0);
-        let before = 0;
-        let after = 0;
-
-        // 收集所有 base64 图片，记录来源
-        type Src =
-          | { kind: "floor" }
-          | { kind: "areaImage"; areaId: string; imageId: string }
-          | { kind: "item"; areaId: string; itemId: string; field: "image" | "gallery" };
-        const tasks: { src: Src; url: string; maxDim: number }[] = [];
-
-        const collect = (url: string | undefined): string | null =>
-          url && url.startsWith("data:image/") ? url : null;
-
-        const fp = collect(state.floorPlanImage);
-        if (fp) {
-          before += byteLen(fp);
-          tasks.push({ src: { kind: "floor" }, url: fp, maxDim: 2000 });
-        }
-
-        state.areas.forEach((a) => {
-          a.images.forEach((img) => {
-            const u = collect(img.url);
-            if (u) {
-              before += byteLen(u);
-              tasks.push({
-                src: { kind: "areaImage", areaId: a.id, imageId: img.id },
-                url: u,
-                maxDim: 1600,
-              });
-            }
-          });
-          a.items.forEach((it) => {
-            const u = collect(it.image);
-            if (u) {
-              before += byteLen(u);
-              tasks.push({
-                src: { kind: "item", areaId: a.id, itemId: it.id, field: "image" },
-                url: u,
-                maxDim: 1200,
-              });
-            }
-            (it.gallery ?? []).forEach((g) => {
-              const gu = collect(g);
-              if (gu) {
-                before += byteLen(gu);
-                tasks.push({
-                  src: { kind: "item", areaId: a.id, itemId: it.id, field: "gallery" },
-                  url: gu,
-                  maxDim: 1200,
-                });
-              }
-            });
-          });
-        });
-
-        if (tasks.length === 0) return { before, after };
-
-        // 并行压缩（最多 4 个并发，避免卡 UI）
-        const results = new Map<number, string>();
-        const CONCURRENCY = 4;
-        let cursor = 0;
-        const worker = async () => {
-          while (cursor < tasks.length) {
-            const i = cursor++;
-            try {
-              const out = await compressImage(tasks[i].url, tasks[i].maxDim, 0.82);
-              // 只有真正变小才采用
-              results.set(i, out.length < tasks[i].url.length ? out : tasks[i].url);
-            } catch {
-              results.set(i, tasks[i].url);
-            }
-          }
-        };
-        await Promise.all(
-          Array.from({ length: Math.min(CONCURRENCY, tasks.length) }, worker)
-        );
-
-        // 统计 after + 应用到状态
-        let newFloorPlan = state.floorPlanImage;
-        const areaMap = new Map<string, Area>();
-
-        tasks.forEach((t, i) => {
-          const out = results.get(i)!;
-          after += byteLen(out);
-          const s = t.src;
-          if (s.kind === "floor") {
-            newFloorPlan = out;
-          } else if (s.kind === "areaImage") {
-            const a = areaMap.get(s.areaId) ?? state.areas.find((x) => x.id === s.areaId)!;
-            areaMap.set(s.areaId, {
-              ...a,
-              images: a.images.map((im) =>
-                im.id === s.imageId ? { ...im, url: out } : im
-              ),
-            });
-          } else {
-            const a = areaMap.get(s.areaId) ?? state.areas.find((x) => x.id === s.areaId)!;
-            areaMap.set(s.areaId, {
-              ...a,
-              items: a.items.map((it) =>
-                it.id === s.itemId
-                  ? s.field === "image"
-                    ? { ...it, image: out }
-                    : { ...it, gallery: (it.gallery ?? []).map((g) => (g === t.url ? out : g)) }
-                  : it
-              ),
-            });
-          }
-        });
-
-        set({
-          floorPlanImage: newFloorPlan,
-          areas: state.areas.map((a) => areaMap.get(a.id) ?? a),
-        });
-
-        return { before, after };
       },
 
       exportData: () => {
