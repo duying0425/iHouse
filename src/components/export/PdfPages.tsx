@@ -13,11 +13,24 @@ interface PageFrameProps {
   children: ReactNode;
   /** 缩放比例（仅用于预览展示，不影响捕获） */
   scale?: number;
+  /** 打印模式：不缩放，直接 A4 原尺寸（配合 window.print 原生打印） */
+  print?: boolean;
 }
 
 /** 页面外框：外层定尺寸占位，中间层缩放，内层固定 A4 尺寸供捕获（无 transform） */
 export const PageFrame = forwardRef<HTMLDivElement, PageFrameProps>(
-  ({ children, scale = 0.5 }, ref) => {
+  ({ children, scale = 0.5, print = false }, ref) => {
+    // 打印模式：直接 A4 原尺寸，不缩放，无阴影圆角
+    if (print) {
+      return (
+        <div
+          style={{ width: PAGE_W, height: PAGE_H }}
+          className="bg-cream text-ink"
+        >
+          <div ref={ref}>{children}</div>
+        </div>
+      );
+    }
     return (
       <div
         style={{
@@ -75,15 +88,15 @@ function PageFooter({ home, page }: { home: Home; page: number }) {
 }
 
 /* ============ 封面页 ============ */
-export const CoverPage = forwardRef<HTMLDivElement, { home: Home }>(
-  ({ home }, ref) => {
+export const CoverPage = forwardRef<HTMLDivElement, { home: Home; print?: boolean }>(
+  ({ home, print }, ref) => {
   const date = new Date().toLocaleDateString("zh-CN", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
   return (
-    <PageFrame ref={ref}>
+    <PageFrame ref={ref} print={print}>
       <div className="flex h-full flex-col items-center justify-between border-[6px] border-clay-500 p-10">
         <div className="flex w-full items-center justify-between text-[10px] uppercase tracking-[0.25em] text-clay-500">
           <span>Home Atlas</span>
@@ -125,10 +138,10 @@ export const CoverPage = forwardRef<HTMLDivElement, { home: Home }>(
 CoverPage.displayName = "CoverPage";
 
 /* ============ 户型图页 ============ */
-export const FloorPlanPage = forwardRef<HTMLDivElement, { home: Home; page: number }>(
-  ({ home, page }, ref) => {
+export const FloorPlanPage = forwardRef<HTMLDivElement, { home: Home; page: number; print?: boolean }>(
+  ({ home, page, print }, ref) => {
   return (
-    <PageFrame ref={ref}>
+    <PageFrame ref={ref} print={print}>
       <PageBody>
         <PageHeader eyebrow="01 · Floor Plan" title="户型平面总览" />
         <div className="flex-1 rounded border border-line bg-paper p-4">
@@ -215,11 +228,11 @@ function AreaImageMarked({
 /* ============ 区域页 ============ */
 export const AreaPage = forwardRef<
   HTMLDivElement,
-  { home: Home; area: Area; index: number; page: number }
+  { home: Home; area: Area; index: number; page: number; print?: boolean }
 >(
-  ({ home, area, index, page }, ref) => {
+  ({ home, area, index, page, print }, ref) => {
   return (
-    <PageFrame ref={ref}>
+    <PageFrame ref={ref} print={print}>
       <PageBody>
         <PageHeader
           eyebrow={`0${index + 2} · Area`}
@@ -305,12 +318,12 @@ AreaPage.displayName = "AreaPage";
 /* ============ 物品页 ============ */
 export const ItemPage = forwardRef<
   HTMLDivElement,
-  { home: Home; area: Area; item: Item; index: number; page: number }
+  { home: Home; area: Area; item: Item; index: number; page: number; print?: boolean }
 >(
-  ({ home, area, item, index, page }, ref) => {
+  ({ home, area, item, index, page, print }, ref) => {
   const color = CATEGORY_COLOR[item.category];
   return (
-    <PageFrame ref={ref}>
+    <PageFrame ref={ref} print={print}>
       <PageBody>
         <PageHeader
           eyebrow={`Item · ${area.name}`}

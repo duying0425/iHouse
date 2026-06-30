@@ -12,6 +12,7 @@ import {
 import PageLayout from "@/components/PageLayout";
 import EmptyState from "@/components/Empty";
 import PdfExportRenderer from "@/components/PdfExportRenderer";
+import PrintExportRenderer from "@/components/PrintExportRenderer";
 import {
   AreaPage,
   CoverPage,
@@ -48,6 +49,10 @@ export default function ExportPage() {
     pages: PageDesc[];
     autoPrint: boolean;
     fileName: string;
+  } | null>(null);
+  // 原生打印导出（更快）
+  const [printPayload, setPrintPayload] = useState<{
+    pages: PageDesc[];
   } | null>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -101,6 +106,14 @@ export default function ExportPage() {
       autoPrint,
       fileName: `${home.title}-居所图鉴.pdf`,
     });
+  };
+
+  // 原生打印导出：用 window.print()，浏览器原生渲染，秒级完成
+  const handlePrintExport = () => {
+    if (exporting) return;
+    setExporting(true);
+    setProgress("正在准备打印…");
+    setPrintPayload({ pages });
   };
 
   return (
@@ -192,29 +205,29 @@ export default function ExportPage() {
           {/* 操作 */}
           <div className="space-y-2">
             <button
-              onClick={() => handleExport(false)}
+              onClick={handlePrintExport}
               disabled={exporting || totalPages === 0}
               className="btn-primary w-full disabled:cursor-not-allowed disabled:opacity-40"
             >
               {exporting ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
-                <Download size={15} />
+                <Printer size={15} />
               )}
-              下载 PDF
+              打印导出（快·推荐）
             </button>
             <button
-              onClick={() => handleExport(true)}
+              onClick={() => handleExport(false)}
               disabled={exporting || totalPages === 0}
               className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Printer size={15} /> 直接打印
+              <Download size={15} /> 下载 PDF（慢）
             </button>
             {progress && (
               <p className="px-1 text-2xs text-clay-500">{progress}</p>
             )}
             <p className="px-1 text-2xs leading-relaxed text-ink/40">
-              导出含封面、户型图、区域页与物品页，区域页标注设备位置。
+              「打印导出」用浏览器原生渲染，秒级完成，在打印对话框选「另存为 PDF」即可保存；「下载 PDF」用逐页截图，较慢但版式更精确。
             </p>
           </div>
         </aside>
@@ -274,6 +287,19 @@ export default function ExportPage() {
             setExporting(false);
             setProgress(null);
             setExportPayload(null);
+          }}
+        />
+      )}
+
+      {/* 原生打印导出器：window.print()，秒级完成 */}
+      {printPayload && (
+        <PrintExportRenderer
+          home={home}
+          pages={printPayload.pages}
+          onDone={() => {
+            setExporting(false);
+            setProgress(null);
+            setPrintPayload(null);
           }}
         />
       )}

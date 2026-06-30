@@ -95,3 +95,48 @@ body {
   background: currentColor;
   animation: pulseRing 2s ease-out infinite;
 }
+
+/* ===== 原生打印导出（window.print） ===== */
+.print-only {
+  display: none;
+}
+
+@media print {
+  /* 打印时隐藏整个应用 UI，只显示打印容器 */
+  body * {
+    visibility: hidden;
+  }
+  #print-export-root,
+  #print-export-root * {
+    visibility: visible;
+  }
+  #print-export-root {
+    display: block;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  /* 每页 A4 一页，强制分页 */
+  .print-page {
+    width: 210mm;
+    height: 297mm;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+  .print-page:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  /* 避免页眉页脚 */
+  @page {
+    margin: 0;
+    size: A4;
+  }
+  html, body {
+    background: #fff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
