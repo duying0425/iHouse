@@ -42,6 +42,7 @@ export default function ExportPage() {
     home.areas.map((a) => a.id)
   );
   const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState<string | null>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // 计算页面清单
@@ -88,16 +89,24 @@ export default function ExportPage() {
   const handleExport = async (autoPrint: boolean) => {
     if (exporting) return;
     setExporting(true);
+    setProgress("准备中…");
     try {
       const els = pageRefs.current
         .slice(0, totalPages)
         .filter((el): el is HTMLDivElement => !!el);
-      await exportPagesToPdf(els, "p", autoPrint, `${home.title}-居所图鉴.pdf`);
+      await exportPagesToPdf(
+        els,
+        "p",
+        autoPrint,
+        `${home.title}-居所图鉴.pdf`,
+        (cur, total) => setProgress(`正在生成 ${cur}/${total} 页…`)
+      );
     } catch (err) {
       console.error("导出失败", err);
       alert("导出失败，请重试。");
     } finally {
       setExporting(false);
+      setProgress(null);
     }
   };
 
@@ -208,8 +217,11 @@ export default function ExportPage() {
             >
               <Printer size={15} /> 直接打印
             </button>
+            {progress && (
+              <p className="px-1 text-2xs text-clay-500">{progress}</p>
+            )}
             <p className="px-1 text-2xs leading-relaxed text-ink/40">
-              导出含封面、户型图、区域页与物品页，物品页标注其在户型图中的位置。
+              导出含封面、户型图、区域页与物品页，区域页标注设备位置。
             </p>
           </div>
         </aside>

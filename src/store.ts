@@ -10,86 +10,19 @@ import type {
   SearchResult,
 } from "@/types";
 import { cloneSeed, collectBrands, genId } from "@/data/seed";
+import { serverStorage } from "@/serverStorage";
 
 /**
- * 基于 IndexedDB 的持久化存储。
- * 之所以不用 localStorage：用户上传的图片是 base64 data URL，
- * 单张可达数 MB，几张图就会撑爆 localStorage 的 5-10MB 配额，
- * 导致 QuotaExceededError —— 表现为「保存没反应 + 刷新后图片丢失」。
- * IndexedDB 配额通常是几百 MB 到 GB 级，能容纳大量图片。
+ * 持久化存储：服务器优先 + 本地 IndexedDB 缓存。
+ * 服务器是多设备共享的数据源头；本地缓存用于离线兜底。
+ * 旧版本数据存在 IndexedDB 中，getItem 回退到本地缓存时自动读取并同步到服务器。
+ * 详见 serverStorage.ts。
  */
-const idbStorage = {
-  _db: null as IDBDatabase | null,
-  _ready: null as Promise<IDBDatabase> | null,
-  open(): Promise<IDBDatabase> {
-    if (this._db) return Promise.resolve(this._db);
-    if (this._ready) return this._ready;
-    this._ready = new Promise((resolve, reject) => {
-      const req = indexedDB.open("home-atlas-db", 1);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("kv")) {
-          db.createObjectStore("kv");
-        }
-      };
-      req.onsuccess = () => {
-        this._db = req.result;
-        resolve(req.result);
-      };
-      req.onerror = () => reject(req.error);
-    });
-    return this._ready;
-  },
-  async getItem(name: string): Promise<string | null> {
-    try {
-      const db = await this.open();
-      const val = await new Promise<string | null>((resolve) => {
-        const tx = db.transaction("kv", "readonly");
-        const req = tx.objectStore("kv").get(name);
-        req.onsuccess = () => resolve((req.result as string) ?? null);
-        req.onerror = () => resolve(null);
-      });
-      if (val) return val;
-      // IndexedDB 里没有，尝试从旧 localStorage 迁移过来
-      try {
-        const old = localStorage.getItem(name);
-        if (old) {
-          await this.setItem(name, old);
-          localStorage.removeItem(name);
-        }
-        return old;
-      } catch {
-        return null;
-      }
-    } catch {
-      return null;
-    }
-  },
-  async setItem(name: string, value: string): Promise<void> {
-    const db = await this.open();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("kv", "readwrite");
-      tx.objectStore("kv").put(value, name);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  },
-  async removeItem(name: string): Promise<void> {
-    try {
-      const db = await this.open();
-      return new Promise((resolve) => {
-        const tx = db.transaction("kv", "readwrite");
-        tx.objectStore("kv").delete(name);
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => resolve();
-      });
-    } catch {
-      // ignore
-    }
-  },
-};
 
 interface HomeState extends Home {
+  // 数据是否已从服务器/本地缓存加载完成（用于门控首屏，避免示例数据闪现）
+  _hasHydrated: boolean;
+
   // 读取
   getArea: (areaId: string) => Area | undefined;
   getItem: (areaId: string, itemId: string) =>
@@ -134,6 +67,7 @@ export const useHomeStore = create<HomeState>()(
   persist(
     (set, get) => ({
       ...cloneSeed(),
+      _hasHydrated: false,
 
       getArea: (areaId) => get().areas.find((a) => a.id === areaId),
 
@@ -355,7 +289,7 @@ export const useHomeStore = create<HomeState>()(
     {
       name: "home-atlas",
       version: 2,
-      storage: createJSONStorage(() => idbStorage),
+      storage: createJSONStorage(() => serverStorage),
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = (persistedState || {}) as Partial<Home>;
         if (fromVersion < 2 && state.areas) {
@@ -414,6 +348,14 @@ export const useHomeStore = create<HomeState>()(
           });
         }
         return state as HomeState;
+      },
+      onRehydrateStorage: () => (state) => {
+        if (state) state._hasHydrated = true;
+      },
+      partialize: (state) => {
+        const { _hasHydrated, ...rest } = state;
+        void _hasHydrated;
+        return rest as HomeState;
       },
     }
   )

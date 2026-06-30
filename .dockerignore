@@ -3,5 +3,7 @@ dist
 .git
 .pnpm-store
 .trae
+server/node_modules
+server/data
 *.log
 .DS_Store

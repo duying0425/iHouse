@@ -14,7 +14,12 @@ export default defineConfig({
       ignored: [
         '**/.pnpm-store/**',
         '**/node_modules/**',
+        '**/server/**',
       ],
+    },
+    // 开发时把 /api 代理到后端（node server/index.js，默认 3000）
+    proxy: {
+      '/api': 'http://localhost:3000',
     },
   },
   plugins: [
