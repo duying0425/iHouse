@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import EmptyState from "@/components/Empty";
+import PdfExportRenderer from "@/components/PdfExportRenderer";
 import {
   AreaPage,
   CoverPage,
@@ -19,7 +20,6 @@ import {
 } from "@/components/export/PdfPages";
 import { useHomeStore } from "@/store";
 import { useUiStore } from "@/uiStore";
-import { exportPagesToPdf } from "@/utils/pdf";
 import type { Home } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +43,12 @@ export default function ExportPage() {
   );
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
+  // 导出时挂载 PdfExportRenderer，完成后卸载
+  const [exportPayload, setExportPayload] = useState<{
+    pages: PageDesc[];
+    autoPrint: boolean;
+    fileName: string;
+  } | null>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
 
   // 计算页面清单
@@ -86,28 +92,15 @@ export default function ExportPage() {
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
 
-  const handleExport = async (autoPrint: boolean) => {
+  const handleExport = (autoPrint: boolean) => {
     if (exporting) return;
     setExporting(true);
     setProgress("准备中…");
-    try {
-      const els = pageRefs.current
-        .slice(0, totalPages)
-        .filter((el): el is HTMLDivElement => !!el);
-      await exportPagesToPdf(
-        els,
-        "p",
-        autoPrint,
-        `${home.title}-居所图鉴.pdf`,
-        (cur, total) => setProgress(`正在生成 ${cur}/${total} 页…`)
-      );
-    } catch (err) {
-      console.error("导出失败", err);
-      alert("导出失败，请重试。");
-    } finally {
-      setExporting(false);
-      setProgress(null);
-    }
+    setExportPayload({
+      pages,
+      autoPrint,
+      fileName: `${home.title}-居所图鉴.pdf`,
+    });
   };
 
   return (
@@ -259,6 +252,31 @@ export default function ExportPage() {
           )}
         </div>
       </div>
+
+      {/* 离屏逐页导出器：导出时挂载，完成后卸载 */}
+      {exportPayload && (
+        <PdfExportRenderer
+          home={home}
+          pages={exportPayload.pages}
+          autoPrint={exportPayload.autoPrint}
+          fileName={exportPayload.fileName}
+          onProgress={(cur, total) =>
+            setProgress(`正在生成 ${cur}/${total} 页…`)
+          }
+          onDone={() => {
+            setExporting(false);
+            setProgress(null);
+            setExportPayload(null);
+          }}
+          onError={(e) => {
+            console.error("导出失败", e);
+            alert("导出失败，请重试。");
+            setExporting(false);
+            setProgress(null);
+            setExportPayload(null);
+          }}
+        />
+      )}
     </PageLayout>
   );
 }

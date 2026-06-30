@@ -30,24 +30,25 @@ export async function exportPagesToPdf(
 
   for (let i = 0; i < pageEls.length; i++) {
     onProgress?.(i + 1, pageEls.length);
-    // 让浏览器有机会刷新 UI（更新进度文字）
-    await new Promise((r) => setTimeout(r, 30));
+    // 让浏览器有机会刷新 UI（更新进度文字）+ 释放上一页内存
+    await new Promise((r) => setTimeout(r, 50));
 
     const el = pageEls[i];
     // 等待图片加载
     await waitForImages(el);
 
     // 单页超时保护：html2canvas 对大体积 base64 / SVG 可能很慢，
-    // 60s 仍未完成则放弃整页（跳过该页继续后续），避免无限转圈
+    // 超时则放弃整页（跳过该页继续后续），避免无限转圈
     const canvas = await withTimeout(
       html2canvas(el, {
-        scale: 1.5,
+        scale: 1,
         useCORS: true,
         backgroundColor: "#FBF8F2",
         logging: false,
-        imageTimeout: 15000,
+        imageTimeout: 10000,
+        removeContainer: true,
       }),
-      90000
+      60000
     ).catch(() => null);
 
     if (!canvas) {
@@ -55,7 +56,7 @@ export async function exportPagesToPdf(
       continue;
     }
 
-    const imgData = canvas.toDataURL("image/jpeg", 0.88);
+    const imgData = canvas.toDataURL("image/jpeg", 0.8);
     // 等比缩放铺满页面
     const imgRatio = canvas.width / canvas.height;
     const pageRatio = pageW / pageH;
