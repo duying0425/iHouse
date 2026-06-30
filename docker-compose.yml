@@ -1,0 +1,18 @@
+# 居所图鉴 (iHouse) - NAS 部署用
+# 在 Synology Container Manager 中导入本文件即可：
+# Container Manager → 容器 → 新增 → 从 yaml 导入（或 项目 → 新增 → 填入本 yaml）
+#
+# 工作原理：build.context 指向 GitHub 仓库，docker compose 会自动 clone
+# 仓库、用其中的 Dockerfile 构建镜像并运行。无需在 NAS 上准备任何其它文件。
+# 访问地址：http://<NAS_IP>:8180
+
+services:
+  ihouse:
+    build:
+      context: https://github.com/duying0425/iHouse.git
+      dockerfile: Dockerfile
+    image: ihouse:latest
+    container_name: ihouse
+    ports:
+      - "8180:80"
+    restart: unless-stopped
