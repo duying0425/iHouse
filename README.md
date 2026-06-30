@@ -12,7 +12,10 @@
 - **图片压缩**：上传/粘贴时自动压缩（canvas 缩放 + JPEG），避免存储爆满。
 - **多设备共享**：数据存服务器 SQLite，所有设备访问同一份数据；本地 IndexedDB 作缓存，离线仍可用，联网自动同步。
 - **数据备份**：一键导出 JSON 备份，可跨设备/环境导入恢复。
-- **PDF 导出**：按 封面 → 户型图 → 区域 → 物品 的层级生成可打印的 PDF 图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
+- **PDF 导出**（两种方式）：
+  - **打印导出（推荐·秒级）**：调用浏览器原生打印，在打印对话框选「另存为 PDF」即可保存；文字为矢量，图片直接渲染，速度比逐页截图快几十倍。
+  - **下载 PDF（精确·较慢）**：逐页离屏渲染 + html2canvas 截图，版式精确但大体积图片时较慢。
+  - 按 封面 → 户型图 → 区域 → 物品 的层级生成图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
 - **检索**：按关键词、分类、品牌、区域筛选物品。
 
 ## 技术栈
@@ -20,6 +23,23 @@
 **前端**：React + TypeScript + Vite + Tailwind CSS + zustand + jsPDF/html2canvas
 
 **后端**：Node.js + Express + better-sqlite3（SQLite 单行存储全部数据，含 base64 图片）
+
+## 快速开始（换环境接手）
+
+```bash
+git clone https://github.com/duying0425/iHouse.git
+cd iHouse
+pnpm install            # 前端依赖
+cd server && npm install && cd ..   # 后端依赖
+# 启动后端（终端1）
+cd server && node index.js
+# 启动前端（终端2）
+pnpm dev
+```
+
+前端 http://localhost:5173/ ，API 自动代理到后端 3000 端口。
+
+> 数据恢复：若之前导出过 JSON 备份，进入「设置 → 数据维护 → 导入备份」即可恢复；或直接在原浏览器打开，IndexedDB 缓存会自动同步到新服务器。
 
 ## 本地开发
 
@@ -88,7 +108,13 @@ services:
 
 ```
 ├── src/                  # 前端源码
-│   ├── components/       # 组件（FloorPlan、AreaImageCanvas、ItemForm 等）
+│   ├── components/       # 组件
+│   │   ├── FloorPlan.tsx         # 户型图 + 区域锚点
+│   │   ├── AreaImageCanvas.tsx   # 区域图 + 物品位置标注
+│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩）
+│   │   ├── export/PdfPages.tsx   # PDF 各页组件（封面/户型/区域/物品）
+│   │   ├── PdfExportRenderer.tsx # 逐页截图导出（html2canvas）
+│   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print，推荐）
 │   ├── pages/            # 页面（首页、设置、检索、区域详情、物品、导出）
 │   ├── store.ts          # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts  # 服务器优先 + IndexedDB 缓存的存储适配器
