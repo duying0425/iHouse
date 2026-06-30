@@ -1,7 +1,7 @@
 import { forwardRef, type ReactNode } from "react";
 import FloorPlan from "@/components/FloorPlan";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
-import type { Area, Home, Item } from "@/types";
+import type { Area, AreaImage, Home, Item } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { countItems } from "@/data/seed";
 
@@ -157,6 +157,61 @@ export const FloorPlanPage = forwardRef<HTMLDivElement, { home: Home; page: numb
 );
 FloorPlanPage.displayName = "FloorPlanPage";
 
+/** 区域图（打印用）：静态展示图片并叠加序号化的物品位置标记，序号与物品清单表对应 */
+function AreaImageMarked({
+  image,
+  items,
+  full,
+}: {
+  image: AreaImage;
+  items: { it: Item; num: number }[];
+  full?: boolean;
+}) {
+  const MARKER_RED = "#E53935";
+  return (
+    <figure className={`flex flex-col ${full ? "col-span-2" : ""}`}>
+      <div className="relative w-full overflow-hidden rounded border border-line bg-clay-50">
+        <img
+          src={image.url}
+          alt={image.label || "区域图"}
+          crossOrigin="anonymous"
+          className="block h-auto w-full"
+        />
+        {items.map(
+          ({ it, num }) =>
+            it.areaImagePos && (
+              <div
+                key={it.id}
+                className="absolute"
+                style={{
+                  left: `${it.areaImagePos.x}%`,
+                  top: `${it.areaImagePos.y}%`,
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <span
+                  className="flex items-center justify-center rounded-full border-2 border-cream font-semibold text-cream"
+                  style={{
+                    width: 20,
+                    height: 20,
+                    fontSize: 10,
+                    background: MARKER_RED,
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+                  }}
+                >
+                  {num}
+                </span>
+              </div>
+            )
+        )}
+      </div>
+      <figcaption className="mt-1 text-[9px] uppercase tracking-wider text-ink/45">
+        {image.label || "区域图"}
+      </figcaption>
+    </figure>
+  );
+}
+
 /* ============ 区域页 ============ */
 export const AreaPage = forwardRef<
   HTMLDivElement,
@@ -171,29 +226,27 @@ export const AreaPage = forwardRef<
           title={area.name}
         />
         <div className="grid grid-cols-2 gap-4">
-          {area.images.slice(0, 2).map((img, i) => (
-            <figure key={img.id} className="flex flex-col">
-              <div className="aspect-[4/3] overflow-hidden rounded border border-line bg-clay-50">
-                <img
-                  src={img.url}
-                  alt={`${area.name} ${img.label || `图${i + 1}`}`}
-                  crossOrigin="anonymous"
-                  className="h-full w-full object-contain"
-                />
-              </div>
-              <figcaption className="mt-1 text-[9px] uppercase tracking-wider text-ink/45">
-                {img.label || (i === 0 ? "区域总图" : "设施图")}
-              </figcaption>
-            </figure>
-          ))}
+          {area.images.slice(0, 2).map((img) => {
+            const firstImgId = area.images[0]?.id;
+            const marked = area.items
+              .map((it, idx) => ({ it, num: idx + 1 }))
+              .filter(
+                ({ it }) =>
+                  !!it.areaImagePos &&
+                  (it.areaImageId ?? firstImgId) === img.id
+              );
+            return (
+              <AreaImageMarked
+                key={img.id}
+                image={img}
+                items={marked}
+                full={area.images.length === 1}
+              />
+            );
+          })}
           {area.images.length === 0 && (
             <p className="col-span-2 py-6 text-center text-[10px] text-ink/40">
               该区域暂无图片
-            </p>
-          )}
-          {area.images.length === 1 && (
-            <p className="col-span-1 self-center text-center text-[10px] text-ink/40">
-              （仅有 1 张图）
             </p>
           )}
         </div>
@@ -210,6 +263,7 @@ export const AreaPage = forwardRef<
           <table className="w-full border-collapse text-[10px]">
             <thead>
               <tr className="border-b border-line text-left text-ink/45">
+                <th className="py-1.5 pr-2 font-normal">#</th>
                 <th className="py-1.5 pr-2 font-normal">名称</th>
                 <th className="py-1.5 pr-2 font-normal">分类</th>
                 <th className="py-1.5 pr-2 font-normal">品牌</th>
@@ -218,8 +272,9 @@ export const AreaPage = forwardRef<
               </tr>
             </thead>
             <tbody>
-              {area.items.map((it) => (
+              {area.items.map((it, idx) => (
                 <tr key={it.id} className="border-b border-line/60">
+                  <td className="py-1.5 pr-2 text-ink/55">{idx + 1}</td>
                   <td className="py-1.5 pr-2 font-medium text-ink">{it.name}</td>
                   <td className="py-1.5 pr-2">
                     <span
