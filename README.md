@@ -2,41 +2,102 @@
 
 居家设施与物品管理应用：导入户型图 → 划分区域 → 每个区域可有多张图（总图/设施图/某面墙等）→ 在区域图上标注每件物品的具体位置 → 导出 PDF 打印归档。
 
+数据存储在服务器（SQLite），支持**多设备共享同一份数据**。
+
 ## 功能特性
 
 - **户型图 + 区域**：导入自己的户型图，划分入户玄关、主卧、客厅、餐厅、厨房、卫生间等区域，拖拽调整区域锚点。
-- **区域多图**：每个区域支持上传一张或多张图（区域总图、设施图、某面墙等），可编辑标签。
+- **区域多图**：每个区域支持上传一张或多张图（区域总图、设施图、某面墙等），可编辑标签；多选上传自动保持顺序。
 - **物品位置标注**：录入物品时直接在区域图上点选位置，红色标记点直观展示物品所处位置；物品详情、区域页、PDF 导出均会显示标注。
-- **图片压缩**：上传时自动压缩（canvas 缩放 + JPEG），并支持一键清洗已存数据，避免本地存储爆满。
-- **IndexedDB 持久化**：使用 IndexedDB 存储（容量远大于 localStorage），支持从旧 localStorage 自动迁移。
-- **数据备份**：一键导出 JSON 备份，可跨设备/浏览器导入恢复。
-- **PDF 导出**：按家 → 区域 → 物品的层级生成可打印的 PDF 图鉴。
+- **图片压缩**：上传/粘贴时自动压缩（canvas 缩放 + JPEG），避免存储爆满。
+- **多设备共享**：数据存服务器 SQLite，所有设备访问同一份数据；本地 IndexedDB 作缓存，离线仍可用，联网自动同步。
+- **数据备份**：一键导出 JSON 备份，可跨设备/环境导入恢复。
+- **PDF 导出**：按 封面 → 户型图 → 区域 → 物品 的层级生成可打印的 PDF 图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
 - **检索**：按关键词、分类、品牌、区域筛选物品。
 
 ## 技术栈
 
-- React + TypeScript + Vite
-- Tailwind CSS
-- zustand（状态管理 + persist 中间件，IndexedDB 存储）
-- jsPDF + html2canvas（PDF 导出）
+**前端**：React + TypeScript + Vite + Tailwind CSS + zustand + jsPDF/html2canvas
+
+**后端**：Node.js + Express + better-sqlite3（SQLite 单行存储全部数据，含 base64 图片）
 
 ## 本地开发
 
+需要同时启动前端 dev server 和后端服务：
+
 ```bash
+# 1. 安装前端依赖
 pnpm install
+
+# 2. 安装后端依赖
+cd server && npm install && cd ..
+
+# 3. 启动后端（默认 3000 端口）
+cd server && node index.js
+
+# 4. 另开终端启动前端（vite 会把 /api 代理到 3000）
 pnpm dev
 ```
 
-默认运行在 http://localhost:5173/ 。
+前端默认运行在 http://localhost:5173/ ，API 自动代理到 http://localhost:3000 。
 
 ## 构建
 
 ```bash
-pnpm build
+pnpm build      # 构建前端到 dist/
+cd server && npm install   # 安装后端依赖
+node server/index.js       # 启动服务（同时提供前端静态文件 + API）
 ```
+
+服务默认监听 3000 端口，访问 http://localhost:3000 即可。
+
+## Docker / NAS 部署
+
+项目支持 Docker 部署，适配 Synology Container Manager（只支持导入 compose YAML、不能执行命令的场景）。
+
+**NAS 上准备一个目录**（如 `/docker/ihouse/`），放入从仓库获取的 `Dockerfile` 和 `docker-compose.yml` 两个文件，然后在 Container Manager 导入 compose 文件即可。Dockerfile 会自动 `git clone` 仓库并构建。
+
+```yaml
+# docker-compose.yml
+services:
+  ihouse:
+    build:
+      context: .
+    image: ihouse:latest
+    container_name: ihouse
+    restart: unless-stopped
+    ports:
+      - "8180:3000"
+    volumes:
+      - ./data:/app/server/data
+```
+
+- 访问：`http://<NAS_IP>:8180`
+- 数据持久化：`./data` 目录（SQLite 数据库文件），重建容器不丢失
+- 更新：代码推到 GitHub 后，在 Container Manager 对项目点「重建」
 
 ## 数据存储说明
 
-- 所有数据保存在浏览器本地（IndexedDB），不上传服务器。
-- 上传的图片会自动压缩为 base64 存储。
-- 在「户型设置」页可一键压缩已有图片、导出/导入 JSON 备份。
+- **服务器为数据源头**：SQLite 存储全部数据（户型图、区域、物品、base64 图片），多设备共享。
+- **本地缓存兜底**：浏览器 IndexedDB 缓存最新数据，服务器不可用时仍可离线使用，联网后自动同步（600ms 防抖）。
+- **图片压缩**：上传/粘贴时自动压缩为 base64 存储（户型图 ≤2000px、区域图 ≤1600px、物品图 ≤1200px，JPEG 0.82-0.85）。
+- **旧数据迁移**：浏览器里原有的 IndexedDB 数据会在首次访问时自动读取并同步到服务器。
+- 在「户型设置 → 数据维护」可导出/导入 JSON 备份。
+
+## 项目结构
+
+```
+├── src/                  # 前端源码
+│   ├── components/       # 组件（FloorPlan、AreaImageCanvas、ItemForm 等）
+│   ├── pages/            # 页面（首页、设置、检索、区域详情、物品、导出）
+│   ├── store.ts          # zustand store（persist + serverStorage）
+│   ├── serverStorage.ts  # 服务器优先 + IndexedDB 缓存的存储适配器
+│   ├── utils/            # 图片压缩、PDF 导出等工具
+│   └── types.ts          # 类型定义
+├── server/               # 后端服务
+│   ├── index.js          # Express + better-sqlite3，API + 静态文件服务
+│   └── package.json
+├── Dockerfile            # 多阶段构建（clone → 前端 build → 后端 install → node 运行）
+├── docker-compose.yml    # NAS 部署用
+└── vite.config.ts        # 含 /api 代理配置
+```
