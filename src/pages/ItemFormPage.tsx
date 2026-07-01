@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ChevronRight, Save, X } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
-import ItemForm, { itemToFormValue, type ItemFormValue } from "@/components/ItemForm";
+import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/ItemForm";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 
@@ -52,6 +52,7 @@ export default function ItemFormPage() {
         gallery: [],
         areaImageId: value.areaImageId || undefined,
         areaImagePos: value.areaImagePos || undefined,
+        contents: normalizeContents(value.contents),
       });
       // replace：避免返回时又回到录入页造成重复保存
       navigate(`/area/${areaId}/item/${created.id}`, { replace: true });

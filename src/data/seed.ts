@@ -167,6 +167,11 @@ export const seedHome: Home = {
           image: img("原木色床头柜产品图，单抽屉简约"),
           areaImageId: "bedroom-overview",
           areaImagePos: { x: 40, y: 60 },
+          contents: [
+            { id: "night-c1", name: "电池", quantity: "4节", remark: "5号" },
+            { id: "night-c2", name: "充电器", quantity: "1个", remark: "Type-C" },
+            { id: "night-c3", name: "电筒", quantity: "1只", remark: "应急用" },
+          ],
         },
         {
           id: "bedroom-ac",
@@ -216,6 +221,11 @@ export const seedHome: Home = {
           image: img("银色对开门冰箱产品图，大容量"),
           areaImageId: "kitchen-overview",
           areaImagePos: { x: 25, y: 40 },
+          contents: [
+            { id: "fridge-c1", name: "雪糕", quantity: "1盒", remark: "冷冻室上层" },
+            { id: "fridge-c2", name: "冰块", quantity: "2格", remark: "制冰盒" },
+            { id: "fridge-c3", name: "饮料", quantity: "6罐", remark: "冷藏室门板" },
+          ],
         },
         {
           id: "kitchen-stove",

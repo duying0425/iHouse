@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardPaste, ImagePlus, Layers, MapPin, Wand2 } from "lucide-react";
+import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
-import { CATEGORIES, type AnchorPosition, type Category, type Item } from "@/types";
+import { CATEGORIES, type AnchorPosition, type Category, type Item, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
 import { compressImage } from "@/utils/compressImage";
 import { useHomeStore } from "@/store";
+import { genId } from "@/data/seed";
 import { cn } from "@/lib/utils";
 
 export interface ItemFormValue {
@@ -20,6 +21,8 @@ export interface ItemFormValue {
   areaImageId: string | null;
   /** 物品在区域图片上的位置 */
   areaImagePos: AnchorPosition | null;
+  /** 储物单元内部物品清单（可选） */
+  contents: StorageEntry[];
 }
 
 export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
@@ -34,7 +37,23 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     image: item?.image ?? "",
     areaImageId: item?.areaImageId ?? null,
     areaImagePos: item?.areaImagePos ?? null,
+    contents: item?.contents?.map((c) => ({ ...c })) ?? [],
   };
+}
+
+/** 将表单中的 contents 规整为可存储格式：丢弃空名称行，裁剪空白，省略空字段 */
+export function normalizeContents(
+  contents: StorageEntry[]
+): StorageEntry[] | undefined {
+  const result = contents
+    .map((c) => ({
+      id: c.id,
+      name: c.name.trim(),
+      quantity: c.quantity?.trim() || undefined,
+      remark: c.remark?.trim() || undefined,
+    }))
+    .filter((c) => c.name.length > 0);
+  return result.length > 0 ? result : undefined;
 }
 
 interface ItemFormProps {
@@ -48,6 +67,7 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
 
   const area = areas.find((a) => a.id === areaId);
   const images = area?.images ?? [];
@@ -68,6 +88,27 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
 
   const set = <K extends keyof ItemFormValue>(k: K, v: ItemFormValue[K]) =>
     onChange({ ...valueRef.current, [k]: v });
+
+  // 储物单元内部物品清单操作
+  const addContent = () => {
+    const entry: StorageEntry = { id: genId("cnt"), name: "", quantity: "", remark: "" };
+    onChange({ ...valueRef.current, contents: [...valueRef.current.contents, entry] });
+    setContentsOpen(true);
+  };
+  const updateContent = (id: string, patch: Partial<StorageEntry>) => {
+    onChange({
+      ...valueRef.current,
+      contents: valueRef.current.contents.map((c) =>
+        c.id === id ? { ...c, ...patch } : c
+      ),
+    });
+  };
+  const removeContent = (id: string) => {
+    onChange({
+      ...valueRef.current,
+      contents: valueRef.current.contents.filter((c) => c.id !== id),
+    });
+  };
 
   const handleFile = async (file?: File) => {
     if (!file) return;
@@ -275,6 +316,81 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
             className="field resize-none"
           />
         </Field>
+
+        {/* 储物单元内部物品清单（可选） */}
+        <div className="card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setContentsOpen((o) => !o)}
+            className="flex w-full items-center gap-1.5 px-4 py-2.5 text-left"
+          >
+            <Box size={14} className="text-ochre" />
+            <h4 className="font-serif text-sm font-semibold text-ink">
+              内部物品清单
+            </h4>
+            <span className="text-2xs text-ink/45">
+              {value.contents.length > 0
+                ? `已录入 ${value.contents.length} 项`
+                : "储物单元可选"}
+            </span>
+            <ChevronDown
+              size={14}
+              className={cn(
+                "ml-auto text-ink/40 transition-transform",
+                contentsOpen && "rotate-180"
+              )}
+            />
+          </button>
+
+          {contentsOpen && (
+            <div className="space-y-2 border-t border-line px-4 py-3">
+              {value.contents.length === 0 && (
+                <p className="text-2xs text-ink/45">
+                  该物品为储物单元（抽屉/冰箱/柜子等）时，可在此记录内部存放了哪些东西，这些内容同样可被检索。
+                </p>
+              )}
+
+              {value.contents.map((c) => (
+                <div key={c.id} className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={c.name}
+                    onChange={(e) => updateContent(c.id, { name: e.target.value })}
+                    placeholder="物品名称（如：电池）"
+                    className="field min-w-[8rem] flex-1"
+                  />
+                  <input
+                    value={c.quantity ?? ""}
+                    onChange={(e) => updateContent(c.id, { quantity: e.target.value })}
+                    placeholder="数量"
+                    className="field w-20"
+                  />
+                  <input
+                    value={c.remark ?? ""}
+                    onChange={(e) => updateContent(c.id, { remark: e.target.value })}
+                    placeholder="备注（可选）"
+                    className="field min-w-[8rem] flex-[2]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeContent(c.id)}
+                    className="btn-ghost text-ochre hover:bg-ochre/10"
+                    title="删除该条"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={addContent}
+                className="btn-secondary mt-1"
+              >
+                <Plus size={14} /> 添加一项
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* 区域图位置点选 */}
         <div className="card p-4">

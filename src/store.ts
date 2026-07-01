@@ -99,9 +99,20 @@ export const useHomeStore = create<HomeState>()(
             if (query.brands && query.brands.length > 0 && (!item.brand || !query.brands.includes(item.brand))) {
               return;
             }
-            // 关键词匹配
+            // 关键词匹配（含储物单元内部物品清单 contents）
             if (kw) {
-              const hay = [item.name, item.brand, item.spec, item.remark, area.name]
+              const contentParts = (item.contents ?? []).flatMap((c) => [
+                c.name,
+                c.remark,
+              ]);
+              const hay = [
+                item.name,
+                item.brand,
+                item.spec,
+                item.remark,
+                area.name,
+                ...contentParts,
+              ]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase();

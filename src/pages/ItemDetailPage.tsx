@@ -7,10 +7,11 @@ import {
   Save,
   Trash2,
   X,
+  Box,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
-import ItemForm, { itemToFormValue, type ItemFormValue } from "@/components/ItemForm";
+import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/ItemForm";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 import { CATEGORY_COLOR } from "@/types";
@@ -61,6 +62,7 @@ export default function ItemDetailPage() {
       image: value.image,
       areaImageId: value.areaImageId || undefined,
       areaImagePos: value.areaImagePos || undefined,
+      contents: normalizeContents(value.contents),
     });
     setEditing(false);
   };
@@ -168,6 +170,46 @@ export default function ItemDetailPage() {
               />
               <InfoRow label="备注" value={found.remark} />
             </dl>
+
+            {/* 内部物品清单（储物单元） */}
+            {found.contents && found.contents.length > 0 && (
+              <div className="mt-6 card overflow-hidden">
+                <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
+                  <Box size={14} className="text-ochre" />
+                  <h3 className="font-serif text-sm font-semibold text-ink">
+                    内部物品清单
+                  </h3>
+                  <span className="ml-auto text-2xs text-ink/45">
+                    共 {found.contents.length} 项
+                  </span>
+                </div>
+                <ul className="divide-y divide-line">
+                  {found.contents.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-baseline gap-3 px-4 py-2.5"
+                    >
+                      <span className="flex-1 text-sm text-ink/80">
+                        {c.name}
+                      </span>
+                      {c.quantity && (
+                        <span className="text-2xs text-ink/55">
+                          {c.quantity}
+                        </span>
+                      )}
+                      {c.remark && (
+                        <span className="max-w-[50%] truncate text-2xs text-ink/45">
+                          {c.remark}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                <p className="border-t border-line px-4 py-2 text-2xs text-ink/40">
+                  清单内的物品名称与备注同样参与关键词检索。
+                </p>
+              </div>
+            )}
 
             {/* 区域图定位 */}
             <div className="mt-6 card overflow-hidden">

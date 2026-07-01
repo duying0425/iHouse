@@ -34,6 +34,16 @@ export const CATEGORY_COLOR: Record<Category, string> = {
   其他: "#6B6258",
 };
 
+/** 储物单元内部存放的物品条目（如抽屉里的电池、冰箱里的饮料） */
+export interface StorageEntry {
+  id: string;
+  name: string;
+  /** 数量（自由文本，如 "4节"、"2个"） */
+  quantity?: string;
+  /** 备注（如 "放于冷藏室门板"） */
+  remark?: string;
+}
+
 /** 物品/设施 */
 export interface Item {
   id: string;
@@ -50,6 +60,8 @@ export interface Item {
   /** 物品在所属区域某张图上的位置（关联到 AreaImage） */
   areaImageId?: string;
   areaImagePos?: AnchorPosition;
+  /** 当物品为储物单元（抽屉/冰箱/柜子等）时，内部存放的物品清单 */
+  contents?: StorageEntry[];
 }
 
 /** 区域内的一张图（总图 / 设施图 / 某面墙等，每个区域可有一张或多张） */

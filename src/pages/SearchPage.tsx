@@ -71,7 +71,7 @@ export default function SearchPage() {
           <input
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
-            placeholder="搜索物品名称、品牌、规格、备注……"
+            placeholder="搜索物品名称、品牌、规格、备注、储物单元内部物品……"
             className="w-full border-b-0 border border-line bg-cream py-3 pl-11 pr-10 text-base text-ink placeholder:text-ink/35 focus:border-clay-400 focus:outline-none rounded"
           />
           {keyword && (
