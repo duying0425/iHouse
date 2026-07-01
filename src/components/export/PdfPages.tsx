@@ -20,14 +20,18 @@ interface PageFrameProps {
 /** 页面外框：外层定尺寸占位，中间层缩放，内层固定 A4 尺寸供捕获（无 transform） */
 export const PageFrame = forwardRef<HTMLDivElement, PageFrameProps>(
   ({ children, scale = 0.5, print = false }, ref) => {
-    // 打印模式：直接 A4 原尺寸，不缩放，无阴影圆角
+    // 打印模式：撑满 .print-page 容器（已由 CSS 定为 210mm×297mm）
+    // 不能用固定像素 PAGE_W/PAGE_H，浏览器打印 DPI 与 96 不一致，
+    // 会导致内容缩在角落、整页填不满
     if (print) {
       return (
         <div
-          style={{ width: PAGE_W, height: PAGE_H }}
+          style={{ width: "100%", height: "100%" }}
           className="bg-cream text-ink"
         >
-          <div ref={ref}>{children}</div>
+          <div ref={ref} style={{ width: "100%", height: "100%" }}>
+            {children}
+          </div>
         </div>
       );
     }
@@ -381,7 +385,6 @@ export const ItemPage = forwardRef<
                         items={[
                           { ...item, areaImagePos: item.areaImagePos! },
                         ]}
-                        activeItemId={item.id}
                         compact
                       />
                       {img.label && (

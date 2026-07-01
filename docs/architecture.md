@@ -146,15 +146,13 @@ iHouse/
 │   │   ├── TopBar.tsx / PageLayout.tsx / Empty.tsx
 │   │   ├── export/
 │   │   │   └── PdfPages.tsx      # PDF 各页组件（封面/户型/区域/物品）
-│   │   ├── PdfExportRenderer.tsx # 逐页截图导出（html2canvas）
-│   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print，推荐）
+│   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print）
 │   ├── pages/                    # 路由页面
 │   ├── data/seed.ts              # 示例数据
 │   ├── lib/utils.ts
 │   ├── utils/
 │   │   ├── compressImage.ts      # 图片压缩
-│   │   ├── image.ts
-│   │   └── pdf.ts                # html2canvas/jsPDF 配置
+│   │   └── image.ts
 │   ├── store.ts                  # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts          # 服务器优先 + IndexedDB 缓存适配器
 │   ├── uiStore.ts                # UI 状态（非持久化）

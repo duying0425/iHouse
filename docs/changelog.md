@@ -2,6 +2,38 @@
 
 > 按时间倒序，最近在上。
 
+## 2026-07-01 · refactor(pdf): 移除 html2canvas 慢方案，统一用原生打印
+
+**背景**：html2canvas 逐页截图方案在大体积图片 + 多页时每页 1-2 分钟，且 `animate-ping` CSS 动画会卡死截图；原生打印方案已足够好。
+**变更**：
+- 删除 `src/components/PdfExportRenderer.tsx`、`src/utils/pdf.ts`
+- 卸载依赖 `html2canvas`、`jspdf`
+- `ExportPage.tsx` 移除「下载 PDF（慢）」按钮及相关 state/handler，仅保留「打印 / 导出 PDF」
+- `PrintExportRenderer.tsx` 清理过时注释
+- 同步更新 README / PRD / architecture 文档
+
+---
+
+## 2026-07-01 · fix(pdf): 修复打印填不满 A4 + 关闭打印框卡 UI
+
+**问题 1**：打印预览内容缩在左上角，右侧/下方白边。
+**根因**：`@page { margin: 0 }` 被嵌套在 `@media print` 内，Chrome/Edge 忽略非顶层 `@page`；`#print-export-root` 用 `position: absolute` 但无显式 width，shrink-to-fit 不可靠；`.print-page` 用 mm 在不同 DPI 下换算偏差。
+**修复**：`@page` 提到顶层；`#print-export-root` 用 `width: 100%`；`.print-page` 改用 `100vw × 100vh` 撑满 `@page`。
+
+**问题 2**：关闭打印对话框（不点打印）后页面卡在「打印中…」。
+**根因**：仅监听 `afterprint`，Chrome/Edge 关闭打印预览窗口时该事件不可靠，兜底 60s。
+**修复**：改用 `afterprint` + `focus` 双信号，兜底缩到 5s，`done` 标志保证只清理一次。
+
+---
+
+## 2026-07-01 · perf(pdf): 打印 CSS 强制保留背景色
+
+**问题**：打印导出的图鉴「掉色」、版式散架（封面边框、区域底色、表格分隔线全没了）。
+**根因**：浏览器打印默认剥离背景色和边框色。
+**修复**：`@media print` 加 `print-color-adjust: exact`（含 `-webkit-` 前缀）。
+
+---
+
 ## 2026-07-01 · docs: 文档整理
 
 **Commit**: `ab7eda5` / 后续 docs 提交

@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ChevronRight,
-  Download,
   FileText,
   Layers,
   Loader2,
@@ -11,7 +10,6 @@ import {
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import EmptyState from "@/components/Empty";
-import PdfExportRenderer from "@/components/PdfExportRenderer";
 import PrintExportRenderer from "@/components/PrintExportRenderer";
 import {
   AreaPage,
@@ -44,12 +42,6 @@ export default function ExportPage() {
   );
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
-  // 导出时挂载 PdfExportRenderer，完成后卸载
-  const [exportPayload, setExportPayload] = useState<{
-    pages: PageDesc[];
-    autoPrint: boolean;
-    fileName: string;
-  } | null>(null);
   // 原生打印导出（更快）
   const [printPayload, setPrintPayload] = useState<{
     pages: PageDesc[];
@@ -96,17 +88,6 @@ export default function ExportPage() {
     setSelectedAreas((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
-
-  const handleExport = (autoPrint: boolean) => {
-    if (exporting) return;
-    setExporting(true);
-    setProgress("准备中…");
-    setExportPayload({
-      pages,
-      autoPrint,
-      fileName: `${home.title}-居所图鉴.pdf`,
-    });
-  };
 
   // 原生打印导出：用 window.print()，浏览器原生渲染，秒级完成
   const handlePrintExport = () => {
@@ -214,20 +195,13 @@ export default function ExportPage() {
               ) : (
                 <Printer size={15} />
               )}
-              打印导出（快·推荐）
-            </button>
-            <button
-              onClick={() => handleExport(false)}
-              disabled={exporting || totalPages === 0}
-              className="btn-secondary w-full disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Download size={15} /> 下载 PDF（慢）
+              打印 / 导出 PDF
             </button>
             {progress && (
               <p className="px-1 text-2xs text-clay-500">{progress}</p>
             )}
             <p className="px-1 text-2xs leading-relaxed text-ink/40">
-              「打印导出」用浏览器原生渲染，秒级完成，在打印对话框选「另存为 PDF」即可保存；「下载 PDF」用逐页截图，较慢但版式更精确。
+              点击后唤起浏览器打印对话框，在「目标」选「另存为 PDF」即可保存。浏览器原生渲染，秒级完成，文字矢量清晰。
             </p>
           </div>
         </aside>
@@ -265,31 +239,6 @@ export default function ExportPage() {
           )}
         </div>
       </div>
-
-      {/* 离屏逐页导出器：导出时挂载，完成后卸载 */}
-      {exportPayload && (
-        <PdfExportRenderer
-          home={home}
-          pages={exportPayload.pages}
-          autoPrint={exportPayload.autoPrint}
-          fileName={exportPayload.fileName}
-          onProgress={(cur, total) =>
-            setProgress(`正在生成 ${cur}/${total} 页…`)
-          }
-          onDone={() => {
-            setExporting(false);
-            setProgress(null);
-            setExportPayload(null);
-          }}
-          onError={(e) => {
-            console.error("导出失败", e);
-            alert("导出失败，请重试。");
-            setExporting(false);
-            setProgress(null);
-            setExportPayload(null);
-          }}
-        />
-      )}
 
       {/* 原生打印导出器：window.print()，秒级完成 */}
       {printPayload && (

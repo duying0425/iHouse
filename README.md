@@ -144,12 +144,11 @@ services:
 │   │   ├── AreaImageCanvas.tsx   # 区域图 + 物品位置标注
 │   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩）
 │   │   ├── export/PdfPages.tsx   # PDF 各页组件（封面/户型/区域/物品）
-│   │   ├── PdfExportRenderer.tsx # 逐页截图导出（html2canvas）
-│   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print，推荐）
+│   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print）
 │   ├── pages/            # 页面（首页、设置、检索、区域详情、物品、导出）
 │   ├── store.ts          # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts  # 服务器优先 + IndexedDB 缓存的存储适配器
-│   ├── utils/            # 图片压缩、PDF 导出等工具
+│   ├── utils/            # 图片压缩等工具
 │   └── types.ts          # 类型定义
 ├── server/               # 后端服务
 │   ├── index.js          # Express + better-sqlite3，API + 静态文件服务

@@ -28,24 +28,35 @@ interface Props {
  * - 加 print-only CSS：打印时只显示这个容器，每页 page-break-after
  * - 调用 window.print()，浏览器原生渲染分页 → 打印为 PDF
  *
- * 相比 html2canvas 方案：
- * - 不用逐页截图重绘，浏览器原生渲染快几十倍
- * - 文字是矢量（清晰可复制），图片直接用 <img>
- * - 5.5MB base64 + 31 页：秒级完成
+ * 浏览器原生渲染，秒级完成；文字矢量（清晰可复制），图片直接用 <img>
  */
 export default function PrintExportRenderer({ home, pages, onDone }: Props) {
   useEffect(() => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("afterprint", finish);
+      window.removeEventListener("focus", finish);
+      onDone();
+    };
+
     // 渲染完成后等图片加载，再触发打印
     const timer = setTimeout(() => {
+      // 打印对话框关闭后的两个信号：afterprint 是标准事件但部分浏览器
+      // （Chrome/Edge 关闭预览窗口时）不可靠；focus 在窗口重获焦点时触发，
+      // 打印框无论确认还是关闭都会触发，更可靠
+      window.addEventListener("afterprint", finish);
+      window.addEventListener("focus", finish);
       window.print();
-      // 打印对话框关闭后清理
-      const cleanup = () => onDone();
-      // afterprint 事件在打印对话框关闭后触发
-      window.addEventListener("afterprint", cleanup, { once: true });
-      // 兜底：某些浏览器 afterprint 不可靠，3s 后也允许手动关闭
-      setTimeout(cleanup, 60000);
+      // 兜底：极端情况下两者都没触发，5s 后强制结束
+      setTimeout(finish, 5000);
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("afterprint", finish);
+      window.removeEventListener("focus", finish);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
