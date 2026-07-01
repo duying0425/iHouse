@@ -23,6 +23,8 @@ export interface ItemFormValue {
   areaImagePos: AnchorPosition | null;
   /** 储物单元内部物品清单（可选） */
   contents: StorageEntry[];
+  /** 使用说明（可选） */
+  usage: string;
 }
 
 export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
@@ -38,6 +40,7 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     areaImageId: item?.areaImageId ?? null,
     areaImagePos: item?.areaImagePos ?? null,
     contents: item?.contents?.map((c) => ({ ...c })) ?? [],
+    usage: item?.usage ?? "",
   };
 }
 
@@ -313,6 +316,16 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
             onChange={(e) => set("remark", e.target.value)}
             placeholder="位置、保修、注意事项……"
             rows={2}
+            className="field resize-none"
+          />
+        </Field>
+
+        <Field label="使用说明">
+          <textarea
+            value={value.usage}
+            onChange={(e) => set("usage", e.target.value)}
+            placeholder="操作步骤、按键说明、常用功能……（可选，如电视机/微波炉等设备的指引）"
+            rows={3}
             className="field resize-none"
           />
         </Field>

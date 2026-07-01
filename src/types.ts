@@ -62,6 +62,8 @@ export interface Item {
   areaImagePos?: AnchorPosition;
   /** 当物品为储物单元（抽屉/冰箱/柜子等）时，内部存放的物品清单 */
   contents?: StorageEntry[];
+  /** 使用说明（可选，如电视机/微波炉等设备的操作指引） */
+  usage?: string;
 }
 
 /** 区域内的一张图（总图 / 设施图 / 某面墙等，每个区域可有一张或多张） */

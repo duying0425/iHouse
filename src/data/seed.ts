@@ -62,6 +62,8 @@ export const seedHome: Home = {
           image: img("索尼65寸超薄智能电视产品图，黑色边框"),
           areaImageId: "living-overview",
           areaImagePos: { x: 82, y: 40 },
+          usage:
+            "1. 遥控器长按电源键开机，短按息屏。\n2. HDMI1 为机顶盒，HDMI2 为游戏机；按 INPUT 切换信号源。\n3. 音量用侧面 +/- 键，静音按 MUTING。\n4. 投屏：设置 → 网络 → 屏幕镜像，手机选 BRAVIA。",
         },
         {
           id: "living-table",

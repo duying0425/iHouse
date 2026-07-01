@@ -53,6 +53,7 @@ export default function ItemFormPage() {
         areaImageId: value.areaImageId || undefined,
         areaImagePos: value.areaImagePos || undefined,
         contents: normalizeContents(value.contents),
+        usage: value.usage.trim() || undefined,
       });
       // replace：避免返回时又回到录入页造成重复保存
       navigate(`/area/${areaId}/item/${created.id}`, { replace: true });

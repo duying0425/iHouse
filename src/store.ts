@@ -110,6 +110,7 @@ export const useHomeStore = create<HomeState>()(
                 item.brand,
                 item.spec,
                 item.remark,
+                item.usage,
                 area.name,
                 ...contentParts,
               ]

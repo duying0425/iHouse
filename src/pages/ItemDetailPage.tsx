@@ -8,6 +8,7 @@ import {
   Trash2,
   X,
   Box,
+  BookOpen,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
@@ -63,6 +64,7 @@ export default function ItemDetailPage() {
       areaImageId: value.areaImageId || undefined,
       areaImagePos: value.areaImagePos || undefined,
       contents: normalizeContents(value.contents),
+      usage: value.usage.trim() || undefined,
     });
     setEditing(false);
   };
@@ -170,6 +172,21 @@ export default function ItemDetailPage() {
               />
               <InfoRow label="备注" value={found.remark} />
             </dl>
+
+            {/* 使用说明（多行） */}
+            {found.usage && (
+              <div className="mt-6 card overflow-hidden">
+                <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
+                  <BookOpen size={14} className="text-ochre" />
+                  <h3 className="font-serif text-sm font-semibold text-ink">
+                    使用说明
+                  </h3>
+                </div>
+                <p className="whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-ink/80">
+                  {found.usage}
+                </p>
+              </div>
+            )}
 
             {/* 内部物品清单（储物单元） */}
             {found.contents && found.contents.length > 0 && (
