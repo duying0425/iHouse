@@ -368,6 +368,48 @@ export const ItemPage = forwardRef<
               <Row label="备注" value={item.remark} />
             </dl>
 
+            {/* 使用说明 */}
+            {item.usage && (
+              <div className="mt-3 rounded border border-line bg-paper p-2.5">
+                <p className="mb-1 text-[10px] font-semibold text-ink">
+                  使用说明
+                </p>
+                <p className="whitespace-pre-wrap text-[11px] leading-relaxed text-ink/75">
+                  {item.usage}
+                </p>
+              </div>
+            )}
+
+            {/* 内部物品清单（储物单元） */}
+            {item.contents && item.contents.length > 0 && (
+              <div className="mt-3 rounded border border-line bg-paper p-2.5">
+                <p className="mb-1.5 flex items-center justify-between text-[10px] font-semibold text-ink">
+                  <span>内部物品清单</span>
+                  <span className="font-normal text-ink/45">
+                    共 {item.contents.length} 项
+                  </span>
+                </p>
+                <ul className="space-y-0.5">
+                  {item.contents.map((c) => (
+                    <li
+                      key={c.id}
+                      className="flex items-baseline gap-2 text-[11px]"
+                    >
+                      <span className="flex-1 text-ink/75">{c.name}</span>
+                      {c.quantity && (
+                        <span className="text-ink/55">{c.quantity}</span>
+                      )}
+                      {c.remark && (
+                        <span className="max-w-[45%] truncate text-ink/45">
+                          {c.remark}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* 区域图定位 */}
             <div className="mt-4 rounded border border-line bg-paper p-2.5">
               <p className="mb-1.5 text-[9px] uppercase tracking-wider text-ink/45">

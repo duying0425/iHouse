@@ -152,4 +152,12 @@ body {
     padding: 0 !important;
     width: 100%;
   }
+  /* 放大打印文字，提升可读性（仅打印生效，不影响屏幕预览） */
+  #print-export-root .text-\[8px\] { font-size: 10px; }
+  #print-export-root .text-\[9px\] { font-size: 11px; }
+  #print-export-root .text-\[10px\] { font-size: 12px; }
+  #print-export-root .text-\[11px\] { font-size: 13px; }
+  #print-export-root .text-2xs { font-size: 12px; }
+  #print-export-root .text-xs { font-size: 13px; }
+  #print-export-root .text-sm { font-size: 15px; }
 }
