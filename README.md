@@ -32,6 +32,17 @@
 
 **后端**：Node.js + Express + better-sqlite3（SQLite 单行存储全部数据，含 base64 图片）
 
+## 环境要求
+
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| Node.js | ≥ 20（推荐 20.x） | better-sqlite3 为原生模块，需匹配 Node ABI；Vite 6 要求 Node 18+ |
+| pnpm | 9.x | `pnpm-lock.yaml` 为 lockfileVersion 9.0。**勿用 pnpm 11+**，它要求 Node ≥22.13，与 Node 20 冲突 |
+| npm | ≥ 10 | 后端依赖用 npm 安装（`server/` 无 lockfile，跟随系统 npm） |
+
+> **包管理器说明**：前端用 pnpm（有 `pnpm-lock.yaml`），后端用 npm（`server/` 无 lockfile）。混用是项目约定，非疏漏。
+> 若已装新版 pnpm，可 `npm install -g pnpm@9` 降级；或改用 Node 22+ 后再用 pnpm 11。
+
 ## 快速开始（换环境接手）
 
 ```bash
@@ -68,6 +79,18 @@ pnpm dev
 ```
 
 前端默认运行在 http://localhost:5173/ ，API 自动代理到 http://localhost:3000 。
+
+**环境变量**（可选，后端 `server/index.js` 读取）：
+
+| 变量 | 默认值 | 作用 |
+|------|--------|------|
+| `PORT` | `3000` | 后端监听端口；改后需同步改 `vite.config.ts` 的 `proxy./api` 目标 |
+| `DATA_DIR` | `server/data` | SQLite 数据库目录，可指向持久化卷（Docker 部署用） |
+
+```bash
+# 示例：自定义端口和数据目录
+PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
+```
 
 ## 构建
 
