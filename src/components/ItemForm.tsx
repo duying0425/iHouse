@@ -4,6 +4,7 @@ import AreaImageCanvas from "@/components/AreaImageCanvas";
 import { CATEGORIES, type AnchorPosition, type Category, type Item, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
 import { compressImage } from "@/utils/compressImage";
+import { uploadImage } from "@/utils/upload";
 import { useHomeStore } from "@/store";
 import { genId } from "@/data/seed";
 import { cn } from "@/lib/utils";
@@ -17,6 +18,7 @@ export interface ItemFormValue {
   price: string;
   remark: string;
   image: string;
+  gallery: string[];
   /** 物品标注在区域图片上的 id */
   areaImageId: string | null;
   /** 物品在区域图片上的位置 */
@@ -37,6 +39,7 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     price: item?.price != null ? String(item.price) : "",
     remark: item?.remark ?? "",
     image: item?.image ?? "",
+    gallery: item?.gallery?.map((g) => g) ?? [],
     areaImageId: item?.areaImageId ?? null,
     areaImagePos: item?.areaImagePos ?? null,
     contents: item?.contents?.map((c) => ({ ...c })) ?? [],
@@ -68,6 +71,7 @@ interface ItemFormProps {
 export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
   const { areas } = useHomeStore();
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
@@ -115,15 +119,21 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    let base64Url = "";
     try {
-      const url = await compressImage(file, 1200, 0.82);
-      set("image", url);
+      base64Url = await compressImage(file, 1200, 0.82);
     } catch {
       // 压缩失败则回退直接读
-      const reader = new FileReader();
-      reader.onload = () => set("image", String(reader.result));
-      reader.readAsDataURL(file);
+      base64Url = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(file);
+      });
     }
+
+    // 异步上传到服务器，成功后存储服务器返回的 URL，失败则回退使用本地 Base64 兜底
+    const finalUrl = await uploadImage(base64Url);
+    set("image", finalUrl);
   };
 
   // 全局粘贴：支持 Ctrl+V 直接粘贴剪贴板里的图片作为物品照片
@@ -242,6 +252,76 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
             placeholder="或粘贴图片 URL"
             className="w-full border-t border-line bg-transparent px-3 py-2 text-2xs text-ink/60 placeholder:text-ink/30 focus:outline-none"
           />
+        </div>
+
+        {/* 附属图册 (可选) */}
+        <div className="card p-4">
+          <h4 className="mb-3 font-serif text-sm font-semibold text-ink flex items-center gap-1.5">
+            <Layers size={14} className="text-moss" />
+            附属图册
+            <span className="text-2xs font-normal text-ink/45">
+              (如保修卡、发票、参数铭牌等)
+            </span>
+          </h4>
+          {value.gallery.length === 0 ? (
+            <p className="py-4 text-center text-2xs text-ink/40 border border-dashed border-line rounded">
+              暂无附属图片，可在下方上传
+            </p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {value.gallery.map((img, idx) => (
+                <div key={idx} className="group relative aspect-[4/3] rounded border border-line overflow-hidden bg-clay-50">
+                  <img src={img} alt={`附属图 ${idx + 1}`} className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set("gallery", value.gallery.filter((_, i) => i !== idx));
+                    }}
+                    className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-ochre text-cream p-1 rounded-full hover:bg-ochre/90 transition-opacity"
+                    title="删除图片"
+                  >
+                    <Trash2 size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={async (e) => {
+              const files = e.target.files;
+              if (!files || files.length === 0) return;
+              const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+              
+              const base64Urls = await Promise.all(
+                list.map((f) => compressImage(f, 1200, 0.82).catch(() => null))
+              );
+              
+              const finalUrls = await Promise.all(
+                base64Urls.map(async (url) => {
+                  if (!url) return null;
+                  return uploadImage(url);
+                })
+              );
+              
+              const validUrls = finalUrls.filter((url): url is string => !!url);
+              if (validUrls.length > 0) {
+                set("gallery", [...value.gallery, ...validUrls]);
+              }
+              if (e.target) e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => galleryInputRef.current?.click()}
+            className="mt-3 w-full rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
+          >
+            <Plus size={12} className="mr-1 inline" /> 上传附属图片 (可多选)
+          </button>
         </div>
       </div>
 

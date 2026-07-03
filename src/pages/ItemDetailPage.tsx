@@ -9,6 +9,7 @@ import {
   X,
   Box,
   BookOpen,
+  Layers,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
@@ -16,6 +17,7 @@ import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 import { CATEGORY_COLOR } from "@/types";
+import SafeImage from "@/components/SafeImage";
 
 export default function ItemDetailPage() {
   const { areaId = "", itemId = "" } = useParams();
@@ -33,6 +35,7 @@ export default function ItemDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<ItemFormValue>(itemToFormValue(found));
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   if (!found || !area) {
     return (
@@ -61,6 +64,7 @@ export default function ItemDetailPage() {
       price: value.price ? Number(value.price) : undefined,
       remark: value.remark.trim() || undefined,
       image: value.image,
+      gallery: value.gallery,
       areaImageId: value.areaImageId || undefined,
       areaImagePos: value.areaImagePos || undefined,
       contents: normalizeContents(value.contents),
@@ -114,22 +118,50 @@ export default function ItemDetailPage() {
         </>
       ) : (
         <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
-          {/* 左：照片 */}
-          <div className="card overflow-hidden">
-            <div className="relative bg-clay-50">
-              <img
-                src={found.image}
-                alt={found.name}
-                className="block h-auto w-full object-contain"
-              />
-              <span className="absolute left-3 top-3 chip bg-cream/90 backdrop-blur-sm">
-                <span
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: color }}
+          {/* 左：照片与相册 */}
+          <div className="space-y-4">
+            <div className="card overflow-hidden">
+              <div className="relative bg-clay-50">
+                <SafeImage
+                  category={found.category}
+                  src={found.image}
+                  alt={found.name}
+                  className="block h-auto w-full object-contain cursor-zoom-in"
+                  fallbackClassName="aspect-[4/3] w-full"
+                  onClick={() => setPreviewImage(found.image)}
                 />
-                {found.category}
-              </span>
+                <span className="absolute left-3 top-3 chip bg-cream/90 backdrop-blur-sm">
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: color }}
+                  />
+                  {found.category}
+                </span>
+              </div>
             </div>
+
+            {found.gallery && found.gallery.length > 0 && (
+              <div className="card p-4">
+                <h3 className="mb-3 font-serif text-sm font-semibold text-ink flex items-center gap-1.5">
+                  <Layers size={14} className="text-moss" />
+                  附属相册
+                  <span className="text-2xs font-normal text-ink/45">
+                    ({found.gallery.length} 张图片)
+                  </span>
+                </h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {found.gallery.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setPreviewImage(img)}
+                      className="aspect-[4/3] rounded border border-line overflow-hidden bg-clay-50 hover:opacity-85 active:scale-[0.98] transition-all"
+                    >
+                      <img src={img} alt={`附属图 ${idx + 1}`} className="h-full w-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 右：信息 */}
@@ -276,6 +308,28 @@ export default function ItemDetailPage() {
               })()}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 图片大图预览 Lightbox */}
+      {previewImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/75 p-4 backdrop-blur-sm transition-all duration-300 animate-fadeIn cursor-zoom-out"
+          onClick={() => setPreviewImage(null)}
+        >
+          <button
+            onClick={() => setPreviewImage(null)}
+            className="absolute right-4 top-4 text-cream hover:text-white bg-ink/50 p-2 rounded-full transition-colors"
+            aria-label="关闭预览"
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={previewImage}
+            alt="预览图片"
+            className="max-h-[90vh] max-w-[90vw] rounded shadow-2xl object-contain animate-zoomIn"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </PageLayout>

@@ -13,6 +13,7 @@ import EmptyState from "@/components/Empty";
 import PrintExportRenderer from "@/components/PrintExportRenderer";
 import {
   AreaPage,
+  AreaContinuationPage,
   CoverPage,
   FloorPlanPage,
   ItemPage,
@@ -25,11 +26,13 @@ import { cn } from "@/lib/utils";
 type Range = "all" | "area" | "search";
 
 interface PageDesc {
-  kind: "cover" | "floorplan" | "area" | "item";
+  kind: "cover" | "floorplan" | "area" | "area-cont" | "item";
   areaId?: string;
   itemId?: string;
   areaIndex?: number;
   itemIndex?: number;
+  startIndex?: number;
+  endIndex?: number;
 }
 
 export default function ExportPage() {
@@ -68,7 +71,28 @@ export default function ExportPage() {
     const areas =
       range === "all" ? home.areas : home.areas.filter((a) => selectedAreas.includes(a.id));
     areas.forEach((a, ai) => {
-      list.push({ kind: "area", areaId: a.id, areaIndex: ai });
+      // 第一页（包含图片、描述、前10个物品）
+      list.push({
+        kind: "area",
+        areaId: a.id,
+        areaIndex: ai,
+        startIndex: 0,
+        endIndex: Math.min(a.items.length, 10),
+      });
+
+      // 续页（不含图和描述，每页可放22个物品）
+      let offset = 10;
+      while (offset < a.items.length) {
+        list.push({
+          kind: "area-cont",
+          areaId: a.id,
+          areaIndex: ai,
+          startIndex: offset,
+          endIndex: Math.min(a.items.length, offset + 22),
+        });
+        offset += 22;
+      }
+
       a.items.forEach((it, ii) =>
         list.push({
           kind: "item",
@@ -277,7 +301,31 @@ function renderPage(
   }
   if (p.kind === "area" && p.areaId != null && p.areaIndex != null) {
     const area = home.areas[p.areaIndex];
-    return <AreaPage ref={setRef} home={home} area={area} index={p.areaIndex} page={pageNumber} />;
+    return (
+      <AreaPage
+        ref={setRef}
+        home={home}
+        area={area}
+        index={p.areaIndex}
+        page={pageNumber}
+        startIndex={p.startIndex}
+        endIndex={p.endIndex}
+      />
+    );
+  }
+  if (p.kind === "area-cont" && p.areaId != null && p.areaIndex != null) {
+    const area = home.areas[p.areaIndex];
+    return (
+      <AreaContinuationPage
+        ref={setRef}
+        home={home}
+        area={area}
+        index={p.areaIndex}
+        page={pageNumber}
+        startIndex={p.startIndex ?? 10}
+        endIndex={p.endIndex ?? area.items.length}
+      />
+    );
   }
   if (p.kind === "item" && p.areaId != null && p.itemId != null) {
     const area = home.areas.find((a) => a.id === p.areaId);
@@ -305,6 +353,7 @@ function labelOf(p: PageDesc): string {
     case "floorplan":
       return "户型图";
     case "area":
+    case "area-cont":
       return "区域";
     case "item":
       return "物品";

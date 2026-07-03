@@ -5,6 +5,7 @@ import PageLayout from "@/components/PageLayout";
 import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/ItemForm";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
+import { imageOf } from "@/utils/image";
 
 export default function ItemFormPage() {
   const { areaId = "" } = useParams();
@@ -46,10 +47,8 @@ export default function ItemFormPage() {
         remark: value.remark.trim() || undefined,
         image:
           value.image ||
-          `https://remote-pod.enterprise.trae.cn/api/ide/v1/text_to_image?prompt=${encodeURIComponent(
-            value.name + " 产品图"
-          )}&image_size=square`,
-        gallery: [],
+          imageOf(value.name + " 产品图", "square"),
+        gallery: value.gallery,
         areaImageId: value.areaImageId || undefined,
         areaImagePos: value.areaImagePos || undefined,
         contents: normalizeContents(value.contents),

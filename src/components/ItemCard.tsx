@@ -3,6 +3,7 @@ import { MapPin } from "lucide-react";
 import type { Item } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { cn } from "@/lib/utils";
+import SafeImage from "@/components/SafeImage";
 
 interface ItemCardProps {
   item: Item;
@@ -36,11 +37,13 @@ export default function ItemCard({
       />
       {/* 图片 */}
       <div className="relative aspect-[4/3] overflow-hidden bg-clay-50">
-        <img
+        <SafeImage
+          category={item.category}
           src={item.image}
           alt={item.name}
           loading="lazy"
           className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+          fallbackClassName="absolute inset-0"
         />
         <span className="absolute left-2 top-2 chip bg-cream/90 backdrop-blur-sm">
           <span

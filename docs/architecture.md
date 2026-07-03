@@ -40,7 +40,6 @@
 - **Tailwind CSS**：样式，暖色调（cream/ink/clay）自定义主题
 - **zustand + persist 中间件**：状态管理 + 持久化
 - **React Router**：路由
-- **jsPDF + html2canvas**：PDF 导出（截图方案）
 - **window.print() + @media print CSS**：PDF 导出（原生打印方案）
 
 ### 后端
@@ -85,11 +84,10 @@ zustand + persist 中间件，关键点：
 - **存储为 base64**：直接嵌入 JSON，随 Home 一起存 SQLite，无需独立文件存储
 - **代价**：SQLite 单行可能达到几 MB（含多张图），`express.json({ limit: "256mb" })` 放宽请求体限制
 
-### 3.4 PDF 导出：两套方案
-
-#### 方案 A：打印导出（推荐·秒级）
+### 3.4 PDF 导出
 
 **组件**：`src/components/PrintExportRenderer.tsx`
+
 **原理**：
 1. `createPortal` 把所有页面挂到 `document.body` 下的 `#print-export-root`
 2. 每页 A4 原尺寸（210mm × 297mm），`PageFrame` 传 `print` prop 跳过缩放 transform
@@ -99,26 +97,6 @@ zustand + persist 中间件，关键点：
 
 **优点**：文字矢量、图片原生渲染、秒级完成
 **缺点**：版式依赖浏览器打印引擎，不同浏览器略有差异
-
-#### 方案 B：下载 PDF（精确·较慢）
-
-**组件**：`src/components/PdfExportRenderer.tsx`
-**原理**：
-1. 离屏渲染一页 → 等待图片加载 → `html2canvas` 截图 → 存 canvas → 渲染下一页
-2. 全部截图完成后，按 A4 比例写入 jsPDF，导出 .pdf
-
-**关键实现细节**（避免 StrictMode 卡死）：
-- `startedRef`：保证 `useEffect` 内的 async 流程只启动一次（StrictMode 会双调用）
-- `cancelledRef`：cleanup 时置 true，async 循环每轮检查提前退出
-- `pageReadyRef`：callback ref 模式，等当前页 DOM 挂载完成再截图
-- 单个 async `for` 循环串行处理所有页，避免并发
-
-**优点**：版式像素级精确，跨浏览器一致
-**缺点**：html2canvas 对大体积 base64 图片很慢（5MB+ 图片、30+ 页时每页可能要 1-2 分钟）
-
-#### 选用建议
-- 日常用打印导出（秒级）
-- 需要精确版式或浏览器打印效果不理想时用下载 PDF
 
 ### 3.5 路由与页面
 
@@ -245,4 +223,4 @@ persist 中间件 `version: 2` + `migrate` 函数自动处理 v1 → v2：
 - SQLite 单行存全量 JSON：单用户场景够用，但全量写入开销随数据增长而增加（目前几 MB 量级无问题）
 - 图片存 base64：体积膨胀约 33%，但简化了存储（无独立文件管理）
 - last-write-wins：多设备同时编辑可能互相覆盖（单用户家庭场景风险低）
-- html2canvas 慢：大体积图片时逐页截图较慢，已通过原生打印方案规避
+- 离屏截图方案已完全废弃，统一使用浏览器原生打印，保障导出效率与文字矢量清晰度

@@ -4,6 +4,7 @@ import AreaImageCanvas from "@/components/AreaImageCanvas";
 import type { Area, AreaImage, Home, Item } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { countItems } from "@/data/seed";
+import SafeImage from "@/components/SafeImage";
 
 // A4 @96dpi
 export const PAGE_W = 794;
@@ -232,9 +233,10 @@ function AreaImageMarked({
 /* ============ 区域页 ============ */
 export const AreaPage = forwardRef<
   HTMLDivElement,
-  { home: Home; area: Area; index: number; page: number; print?: boolean }
+  { home: Home; area: Area; index: number; page: number; startIndex?: number; endIndex?: number; print?: boolean }
 >(
-  ({ home, area, index, page, print }, ref) => {
+  ({ home, area, index, page, startIndex = 0, endIndex = 10, print }, ref) => {
+  const slicedItems = area.items.slice(startIndex, endIndex);
   return (
     <PageFrame ref={ref} print={print}>
       <PageBody>
@@ -275,7 +277,7 @@ export const AreaPage = forwardRef<
         {/* 物品清单表 */}
         <div className="mt-5">
           <h3 className="mb-2 font-serif text-sm font-semibold text-ink">
-            物品清单（{area.items.length}）
+            物品清单（{startIndex + 1} - {Math.min(endIndex, area.items.length)} / {area.items.length}）
           </h3>
           <table className="w-full border-collapse text-[10px]">
             <thead>
@@ -289,9 +291,9 @@ export const AreaPage = forwardRef<
               </tr>
             </thead>
             <tbody>
-              {area.items.map((it, idx) => (
+              {slicedItems.map((it, idx) => (
                 <tr key={it.id} className="border-b border-line/60">
-                  <td className="py-1.5 pr-2 text-ink/55">{idx + 1}</td>
+                  <td className="py-1.5 pr-2 text-ink/55">{startIndex + idx + 1}</td>
                   <td className="py-1.5 pr-2 font-medium text-ink">{it.name}</td>
                   <td className="py-1.5 pr-2">
                     <span
@@ -319,6 +321,68 @@ export const AreaPage = forwardRef<
 );
 AreaPage.displayName = "AreaPage";
 
+/* ============ 区域页续页 ============ */
+export const AreaContinuationPage = forwardRef<
+  HTMLDivElement,
+  { home: Home; area: Area; index: number; page: number; startIndex: number; endIndex: number; print?: boolean }
+>(
+  ({ home, area, index, page, startIndex, endIndex, print }, ref) => {
+  const slicedItems = area.items.slice(startIndex, endIndex);
+  return (
+    <PageFrame ref={ref} print={print}>
+      <PageBody>
+        <PageHeader
+          eyebrow={`0${index + 2} · Area (Cont.)`}
+          title={`${area.name} (续)`}
+        />
+
+        {/* 物品清单表 */}
+        <div className="flex-1">
+          <h3 className="mb-2 font-serif text-sm font-semibold text-ink">
+            物品清单续表（{startIndex + 1} - {Math.min(endIndex, area.items.length)} / {area.items.length}）
+          </h3>
+          <table className="w-full border-collapse text-[10px]">
+            <thead>
+              <tr className="border-b border-line text-left text-ink/45">
+                <th className="py-1.5 pr-2 font-normal">#</th>
+                <th className="py-1.5 pr-2 font-normal">名称</th>
+                <th className="py-1.5 pr-2 font-normal">分类</th>
+                <th className="py-1.5 pr-2 font-normal">品牌</th>
+                <th className="py-1.5 pr-2 font-normal">规格</th>
+                <th className="py-1.5 text-right font-normal">价格</th>
+              </tr>
+            </thead>
+            <tbody>
+              {slicedItems.map((it, idx) => (
+                <tr key={it.id} className="border-b border-line/60">
+                  <td className="py-1.5 pr-2 text-ink/55">{startIndex + idx + 1}</td>
+                  <td className="py-1.5 pr-2 font-medium text-ink">{it.name}</td>
+                  <td className="py-1.5 pr-2">
+                    <span
+                      className="inline-block h-1.5 w-1.5 rounded-full align-middle"
+                      style={{ background: CATEGORY_COLOR[it.category] }}
+                    />{" "}
+                    {it.category}
+                  </td>
+                  <td className="py-1.5 pr-2 text-ink/65">{it.brand || "—"}</td>
+                  <td className="py-1.5 pr-2 text-ink/65">{it.spec || "—"}</td>
+                  <td className="py-1.5 text-right text-ink/65">
+                    {it.price != null ? `¥${it.price.toLocaleString()}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <PageFooter home={home} page={page} />
+      </PageBody>
+    </PageFrame>
+  );
+  }
+);
+AreaContinuationPage.displayName = "AreaContinuationPage";
+
 /* ============ 物品页 ============ */
 export const ItemPage = forwardRef<
   HTMLDivElement,
@@ -336,12 +400,14 @@ export const ItemPage = forwardRef<
         <div className="grid flex-1 grid-cols-[1.1fr_1fr] gap-5">
           {/* 左：大图 */}
           <div>
-            <div className="aspect-[4/3] overflow-hidden rounded border border-line bg-clay-50">
-              <img
+            <div className="aspect-[4/3] overflow-hidden rounded border border-line bg-clay-50 relative">
+              <SafeImage
+                category={item.category}
                 src={item.image}
                 alt={item.name}
                 crossOrigin="anonymous"
                 className="h-full w-full object-contain"
+                fallbackClassName="absolute inset-0"
               />
             </div>
             <div className="mt-3 flex items-center gap-2">
@@ -353,6 +419,29 @@ export const ItemPage = forwardRef<
                 {item.category} · No.{String(index + 1).padStart(2, "0")}
               </span>
             </div>
+
+            {item.gallery && item.gallery.length > 0 && (
+              <div className="mt-4">
+                <p className="mb-1.5 text-[9px] uppercase tracking-wider text-ink/40">
+                  相关附属图册
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {item.gallery.slice(0, 6).map((img, idx) => (
+                    <div
+                      key={idx}
+                      className="aspect-[4/3] rounded border border-line overflow-hidden bg-clay-50"
+                    >
+                      <img
+                        src={img}
+                        alt={`附图 ${idx + 1}`}
+                        crossOrigin="anonymous"
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 右：信息 + 位置 */}

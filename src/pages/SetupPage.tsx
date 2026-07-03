@@ -22,6 +22,7 @@ import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 import { CATEGORIES } from "@/types";
 import { compressImage } from "@/utils/compressImage";
+import { uploadImage } from "@/utils/upload";
 import { cn } from "@/lib/utils";
 
 export default function SetupPage() {
@@ -84,15 +85,20 @@ export default function SetupPage() {
 
   const handleUpload = async (file?: File) => {
     if (!file) return;
+    let base64Url = "";
     try {
-      const url = await compressImage(file, 2000, 0.85);
-      setFloorPlanImage(url);
+      base64Url = await compressImage(file, 2000, 0.85);
     } catch {
       // 压缩失败则回退直接读
-      const reader = new FileReader();
-      reader.onload = () => setFloorPlanImage(String(reader.result));
-      reader.readAsDataURL(file);
+      base64Url = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.readAsDataURL(file);
+      });
     }
+
+    const finalUrl = await uploadImage(base64Url);
+    setFloorPlanImage(finalUrl);
   };
 
   const handleAdd = () => {
@@ -470,7 +476,7 @@ function AreaImagesEditor({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // 支持一次选择多个文件，全部压缩完后再按原始顺序添加（避免异步乱序）
+  // 支持一次选择多个文件，全部压缩完并上传后再按原始顺序添加（避免异步乱序）
   const handleFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
@@ -478,10 +484,19 @@ function AreaImagesEditor({
     const baseIdx = images.length;
 
     // 并行压缩，但按输入顺序等待全部完成
-    const urls = await Promise.all(
+    const base64Urls = await Promise.all(
       list.map((f) => compressImage(f, 1600, 0.82).catch(() => null))
     );
-    urls.forEach((url, i) => {
+
+    // 并行上传这些图片，若失败则用原 base64 兜底
+    const finalUrls = await Promise.all(
+      base64Urls.map(async (url) => {
+        if (!url) return null;
+        return uploadImage(url);
+      })
+    );
+
+    finalUrls.forEach((url, i) => {
       if (url) onAdd({ url, label: `图 ${baseIdx + i + 1}` });
     });
   };

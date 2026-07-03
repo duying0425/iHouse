@@ -5,7 +5,7 @@ import TopBar from "@/components/TopBar";
 import FloorPlan from "@/components/FloorPlan";
 import { useHomeStore } from "@/store";
 import { countItems } from "@/data/seed";
-import { CATEGORIES } from "@/types";
+import { CATEGORIES, CATEGORY_COLOR } from "@/types";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -14,6 +14,27 @@ export default function HomePage() {
 
   const totalItems = useMemo(() => countItems(areas), [areas]);
   const totalAreas = areas.length;
+
+  const { totalValue, categoryCounts } = useMemo(() => {
+    let value = 0;
+    const counts: Record<string, number> = {};
+    CATEGORIES.forEach((c) => {
+      counts[c] = 0;
+    });
+
+    areas.forEach((area) => {
+      area.items.forEach((item) => {
+        if (item.price != null) {
+          value += item.price;
+        }
+        if (counts[item.category] !== undefined) {
+          counts[item.category]++;
+        }
+      });
+    });
+
+    return { totalValue: value, categoryCounts: counts };
+  }, [areas]);
 
   return (
     <div className="min-h-screen">
@@ -46,7 +67,7 @@ export default function HomePage() {
             <div className="flex shrink-0 gap-6 border-l border-line pl-6 md:flex-col md:gap-3 md:border-l-0 md:border-t md:border-t-0 md:pl-0">
               <Stat label="区域" value={totalAreas} suffix="个" />
               <Stat label="物品" value={totalItems} suffix="件" />
-              <Stat label="分类" value={CATEGORIES.length} suffix="类" />
+              <Stat label="总估值" value={totalValue} suffix="元" isPrice />
             </div>
           </div>
         </div>
@@ -123,6 +144,46 @@ export default function HomePage() {
               ))}
             </div>
 
+            {/* 资产统计图表 */}
+            {totalItems > 0 && (
+              <div className="card p-4 space-y-3 shadow-card transition-all">
+                <div className="flex items-center justify-between border-b border-line pb-2">
+                  <h3 className="font-serif text-sm font-semibold text-ink flex items-center gap-1.5">
+                    <Boxes size={14} className="text-moss" />
+                    物品分类统计
+                  </h3>
+                  <span className="text-2xs text-ink/40">总 {totalItems} 件物品</span>
+                </div>
+                <div className="space-y-2.5">
+                  {CATEGORIES.map((cat) => {
+                    const count = categoryCounts[cat] || 0;
+                    const pct = totalItems > 0 ? (count / totalItems) * 100 : 0;
+                    const color = CATEGORY_COLOR[cat];
+                    if (count === 0) return null;
+                    return (
+                      <div key={cat} className="space-y-1">
+                        <div className="flex justify-between text-2xs">
+                          <span className="flex items-center gap-1 text-ink/75">
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                            {cat}
+                          </span>
+                          <span className="text-ink/50 font-medium">
+                            {count} 件 · {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                        <div className="h-1.5 w-full rounded-full bg-clay-50 overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${pct}%`, background: color }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 快捷操作 */}
             <div className="mt-2 grid grid-cols-3 gap-2.5">
               <Link
@@ -161,15 +222,20 @@ function Stat({
   label,
   value,
   suffix,
+  isPrice = false,
 }: {
   label: string;
   value: number;
   suffix: string;
+  isPrice?: boolean;
 }) {
+  const displayVal = isPrice
+    ? value.toLocaleString("zh-CN")
+    : String(value).padStart(2, "0");
   return (
     <div>
       <div className="font-display text-3xl font-semibold text-clay-500">
-        {String(value).padStart(2, "0")}
+        {displayVal}
         <span className="ml-0.5 text-sm font-normal text-ink/40">{suffix}</span>
       </div>
       <div className="text-2xs uppercase tracking-wider text-ink/45">

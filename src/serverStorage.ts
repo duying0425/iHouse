@@ -92,11 +92,26 @@ async function flushSync() {
   const value = pendingValue;
   try {
     const parsed = JSON.parse(value);
-    await fetch("/api/home", {
+    const res = await fetch("/api/home", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.state),
     });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.data) {
+        const nextStateJson = JSON.stringify(data.data);
+        const currentStateJson = JSON.stringify(parsed.state);
+        if (nextStateJson !== currentStateJson) {
+          const name = "home-atlas";
+          const wrapped = JSON.stringify({ state: data.data, version: 2 });
+          await idbCache.setItem(name, wrapped);
+          
+          const { useHomeStore } = await import("@/store");
+          useHomeStore.setState(data.data);
+        }
+      }
+    }
   } catch (e) {
     // 服务器不可用：数据已在本地缓存，下次在线时会再次尝试同步
     console.warn("[serverStorage] 同步到服务器失败，已保留本地缓存", e);

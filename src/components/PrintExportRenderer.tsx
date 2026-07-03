@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import {
   AreaPage,
+  AreaContinuationPage,
   CoverPage,
   FloorPlanPage,
   ItemPage,
@@ -9,11 +10,13 @@ import type { Home } from "@/types";
 import { useEffect } from "react";
 
 interface PageDesc {
-  kind: "cover" | "floorplan" | "area" | "item";
+  kind: "cover" | "floorplan" | "area" | "area-cont" | "item";
   areaId?: string;
   itemId?: string;
   areaIndex?: number;
   itemIndex?: number;
+  startIndex?: number;
+  endIndex?: number;
 }
 
 interface Props {
@@ -76,6 +79,22 @@ export default function PrintExportRenderer({ home, pages, onDone }: Props) {
           area={area}
           index={p.areaIndex}
           page={pageNumber}
+          startIndex={p.startIndex}
+          endIndex={p.endIndex}
+          print
+        />
+      );
+    }
+    if (p.kind === "area-cont" && p.areaIndex != null) {
+      const area = home.areas[p.areaIndex];
+      return (
+        <AreaContinuationPage
+          home={home}
+          area={area}
+          index={p.areaIndex}
+          page={pageNumber}
+          startIndex={p.startIndex ?? 10}
+          endIndex={p.endIndex ?? area.items.length}
           print
         />
       );
