@@ -4,6 +4,7 @@ import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import { extractBase64Images } from "./utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,64 +30,8 @@ db.exec(`
   )
 `);
 
-// 提取数据中的 Base64 图片并保存为物理文件
-function extractBase64Images(obj) {
-  let changed = false;
-  if (!obj || typeof obj !== "object") return changed;
+// extractBase64Images is imported from ./utils.js
 
-  for (const key in obj) {
-    if (typeof obj[key] === "string" && obj[key].startsWith("data:image/")) {
-      const base64Str = obj[key];
-      const matches = base64Str.match(/^data:image\/([a-zA-Z+0-9]+);base64,(.+)$/);
-      if (matches && matches.length === 3) {
-        let ext = matches[1];
-        if (ext.includes("+")) {
-          ext = ext.split("+")[0];
-        }
-        const dataBuffer = Buffer.from(matches[2], "base64");
-        const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
-        const filename = `${hash}.${ext}`;
-        const filePath = path.join(IMAGES_DIR, filename);
-
-        if (!fs.existsSync(filePath)) {
-          fs.writeFileSync(filePath, dataBuffer);
-        }
-        obj[key] = `/api/images/${filename}`;
-        changed = true;
-      }
-    } else if (Array.isArray(obj[key])) {
-      for (let i = 0; i < obj[key].length; i++) {
-        if (typeof obj[key][i] === "string" && obj[key][i].startsWith("data:image/")) {
-          const base64Str = obj[key][i];
-          const matches = base64Str.match(/^data:image\/([a-zA-Z+0-9]+);base64,(.+)$/);
-          if (matches && matches.length === 3) {
-            let ext = matches[1];
-            if (ext.includes("+")) {
-              ext = ext.split("+")[0];
-            }
-            const dataBuffer = Buffer.from(matches[2], "base64");
-            const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
-            const filename = `${hash}.${ext}`;
-            const filePath = path.join(IMAGES_DIR, filename);
-
-            if (!fs.existsSync(filePath)) {
-              fs.writeFileSync(filePath, dataBuffer);
-            }
-            obj[key][i] = `/api/images/${filename}`;
-            changed = true;
-          }
-        } else if (typeof obj[key][i] === "object") {
-          const childChanged = extractBase64Images(obj[key][i]);
-          if (childChanged) changed = true;
-        }
-      }
-    } else if (typeof obj[key] === "object") {
-      const childChanged = extractBase64Images(obj[key]);
-      if (childChanged) changed = true;
-    }
-  }
-  return changed;
-}
 
 // 备份并迁移旧数据库中的 Base64 数据
 function migrateBase64ToFiles() {
@@ -102,7 +47,7 @@ function migrateBase64ToFiles() {
   }
 
   console.log("正在检查并迁移旧数据中的 Base64 图片...");
-  const changed = extractBase64Images(homeData);
+  const changed = extractBase64Images(homeData, IMAGES_DIR);
   if (changed) {
     try {
       const backupPath = `${DB_PATH}.bak`;
@@ -194,7 +139,7 @@ app.get("/api/home", (_req, res) => {
 app.put("/api/home", (req, res) => {
   const homeData = req.body ?? null;
   if (homeData) {
-    extractBase64Images(homeData);
+    extractBase64Images(homeData, IMAGES_DIR);
   }
   const data = JSON.stringify(homeData);
   const now = new Date().toISOString();
