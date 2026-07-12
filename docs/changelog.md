@@ -2,6 +2,40 @@
 
 > 按时间倒序，最近在上。
 
+## 2026-07-10 · feat(maintenance): 新增物品维护提醒功能
+
+**Commit**: `cd6ac2a`
+**背景**：居家设备（净水器滤芯、空调清洗、热水器镁棒、油烟机油网等）需要定期维护，纯档案不够，要能主动提醒到期。
+**变更**：
+- `src/types.ts`：Item 新增 `maintenanceCycle`（天）、`lastMaintenanceDate`（YYYY-MM-DD）两个可选字段
+- 新增 `src/utils/maintenance.ts`：5 档状态计算（none/ok/due-soon/overdue/pending-setup）+ 日期工具（parseDateDay/formatDateDay/daysBetween）+ 周期预设 + 周期文案 + 状态展示色
+- `src/components/ItemForm.tsx`：新增「维护提醒」录入区（5 个预设按钮 + 自定义天数 + 上次维护日期 + 实时预览下次到期日）
+- `src/pages/ItemFormPage.tsx` / `ItemDetailPage.tsx`：保存时传递新字段
+- `src/pages/ItemDetailPage.tsx`：标题下维护徽标 + 过期/即将到期高亮提醒卡（带「去更新」）+ 信息表加维护周期/上次/下次维护行
+- `src/pages/HomePage.tsx`：新增维护提醒面板，自动汇总过期/即将到期/待首次维护，按紧急度排序，点击直达详情
+- `src/data/seed.ts`：给空调/油烟机/热水器加维护周期，演示过期与即将到期
+- 新增 `src/utils/maintenance.test.ts`：24 个单元测试覆盖状态计算、跨年/闰年、边界、文案
+**效果**：首页一打开即可看到「X 件已过期 · Y 件即将到期」，点击直达对应物品；详情页有醒目提醒卡。测试总数 17 → 41。
+
+---
+
+## 2026-07-10 · docs: 更新所有文档反映维护提醒与最新架构
+
+**变更**：
+- `README.md`：功能清单加「物品档案」「维护提醒」「单元测试」；修正 PDF 描述（移除已删除的 html2canvas 慢方案）；技术栈移除 jsPDF/html2canvas；项目结构补 SafeImage/upload/maintenance/utils.js/docs/vitest.config.ts
+- `docs/PRD.md`：3.3 物品字段补全（使用说明/contents）；新增 3.4 维护提醒章节；数据模型补 maintenanceCycle/lastMaintenanceDate/contents/usage；从「不做」移除「维护周期提醒」（已实现）；后续方向加「主动通知」
+- `docs/architecture.md`：新增 3.5 维护提醒设计；项目结构补全；路由说明加维护面板/徽标
+- `docs/changelog.md`：补本次迭代记录
+
+---
+
+## 2026-07-10 · chore: 修复 upload.test.ts 中 any 类型 lint 错误
+
+**Commit**: `e7b3f13`
+**变更**：3 处 `as any` 改为 `as typeof globalThis.fetch`，lint 错误归零。
+
+---
+
 ## 2026-07-01 · refactor(pdf): 移除 html2canvas 慢方案，统一用原生打印
 
 **背景**：html2canvas 逐页截图方案在大体积图片 + 多页时每页 1-2 分钟，且 `animate-ping` CSS 动画会卡死截图；原生打印方案已足够好。

@@ -17,18 +17,18 @@
 - **户型图 + 区域**：导入自己的户型图，划分入户玄关、主卧、客厅、餐厅、厨房、卫生间等区域，拖拽调整区域锚点。
 - **区域多图**：每个区域支持上传一张或多张图（区域总图、设施图、某面墙等），可编辑标签；多选上传自动保持顺序。
 - **物品位置标注**：录入物品时直接在区域图上点选位置，红色标记点直观展示物品所处位置；物品详情、区域页、PDF 导出均会显示标注。
+- **物品档案**：名称/分类/品牌/规格/购入日期/价格/备注/主图/附属图册/使用说明/储物单元内部清单，字段齐全。
+- **维护提醒**：为定期维护设备（净水器滤芯、空调清洗、热水器镁棒等）设置维护周期与上次维护日期，首页自动汇总「已过期 / 即将到期 / 待首次维护」列表，详情页显示状态徽标与高亮提醒。
 - **图片压缩**：上传/粘贴时自动压缩（canvas 缩放 + JPEG），避免存储爆满。
 - **多设备共享**：数据存服务器 SQLite，所有设备访问同一份数据；本地 IndexedDB 作缓存，离线仍可用，联网自动同步。
 - **数据备份**：一键导出 JSON 备份，可跨设备/环境导入恢复。
-- **PDF 导出**（两种方式）：
-  - **打印导出（推荐·秒级）**：调用浏览器原生打印，在打印对话框选「另存为 PDF」即可保存；文字为矢量，图片直接渲染，速度比逐页截图快几十倍。
-  - **下载 PDF（精确·较慢）**：逐页离屏渲染 + html2canvas 截图，版式精确但大体积图片时较慢。
-  - 按 封面 → 户型图 → 区域 → 物品 的层级生成图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
+- **PDF 导出（原生打印·秒级）**：调用浏览器原生打印，在打印对话框选「另存为 PDF」即可保存；文字矢量、图片直接渲染。按 封面 → 户型图 → 区域 → 物品 的层级生成图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
 - **检索**：按关键词、分类、品牌、区域筛选物品。
+- **单元测试**：vitest 覆盖工具函数（图片处理、上传、维护状态计算、cn 等），41 个测试全过。
 
 ## 技术栈
 
-**前端**：React + TypeScript + Vite + Tailwind CSS + zustand + jsPDF/html2canvas
+**前端**：React + TypeScript + Vite + Tailwind CSS + zustand + vitest
 
 **后端**：Node.js + Express + better-sqlite3（SQLite 单行存储全部数据，含 base64 图片）
 
@@ -142,18 +142,26 @@ services:
 │   ├── components/       # 组件
 │   │   ├── FloorPlan.tsx         # 户型图 + 区域锚点
 │   │   ├── AreaImageCanvas.tsx   # 区域图 + 物品位置标注
-│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩）
+│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩、维护周期）
+│   │   ├── SafeImage.tsx         # 图片带占位/兜底
 │   │   ├── export/PdfPages.tsx   # PDF 各页组件（封面/户型/区域/物品）
 │   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print）
 │   ├── pages/            # 页面（首页、设置、检索、区域详情、物品、导出）
 │   ├── store.ts          # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts  # 服务器优先 + IndexedDB 缓存的存储适配器
-│   ├── utils/            # 图片压缩等工具
+│   ├── utils/            # 工具
+│   │   ├── compressImage.ts      # 图片压缩
+│   │   ├── upload.ts             # 图片上传到服务器
+│   │   ├── maintenance.ts        # 维护状态计算（过期/即将到期/正常）
+│   │   └── *.test.ts             # 单元测试
 │   └── types.ts          # 类型定义
 ├── server/               # 后端服务
 │   ├── index.js          # Express + better-sqlite3，API + 静态文件服务
+│   ├── utils.js          # 后端工具函数（含单元测试）
 │   └── package.json
+├── docs/                 # 文档（PRD / 架构 / 迭代记录）
 ├── Dockerfile            # 多阶段构建（clone → 前端 build → 后端 install → node 运行）
 ├── docker-compose.yml    # NAS 部署用
+├── vitest.config.ts      # 单元测试配置
 └── vite.config.ts        # 含 /api 代理配置
 ```

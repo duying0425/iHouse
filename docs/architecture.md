@@ -98,14 +98,27 @@ zustand + persist 中间件，关键点：
 **优点**：文字矢量、图片原生渲染、秒级完成
 **缺点**：版式依赖浏览器打印引擎，不同浏览器略有差异
 
-### 3.5 路由与页面
+### 3.5 维护提醒
+
+**模块**：`src/utils/maintenance.ts`
+
+**原理**：
+- Item 携带 `maintenanceCycle`（天）和 `lastMaintenanceDate`（YYYY-MM-DD）两个可选字段
+- `getMaintenanceStatus(item, now)` 计算下次维护日 = `lastMaintenanceDate + cycle 天`，与今天比较得出 5 档状态：`none / ok / due-soon(≤7天) / overdue / pending-setup`
+- 日期按「天」零时计算（避免时区把当天算成 -1），`parseDateDay` 严格校验 YYYY-MM-DD 格式
+- 首页 `maintenanceAlerts` 用 `useMemo` 汇总所有需提醒物品，按 `overdue → due-soon → pending-setup` 紧急度排序
+- 表单内 `MaintenancePreview` 实时预览：用户填周期/日期时即可看到下次到期日与状态
+
+**测试**：`src/utils/maintenance.test.ts` 24 个用例覆盖状态计算、跨年/闰年日期、边界条件、文案生成。
+
+### 3.6 路由与页面
 
 ```
-/                → 首页（户型图 + 区域列表）
+/                → 首页（户型图 + 区域列表 + 维护提醒面板）
 /setup           → 户型设置（导入户型图、数据维护）
 /search          → 检索
 /area/:id        → 区域详情（区域图 + 物品列表）
-/item/:id        → 物品详情
+/item/:id        → 物品详情（含维护徽标 + 高亮提醒）
 /item/new?area=  → 新增物品
 /item/:id/edit   → 编辑物品
 /export          → 导出 PDF
@@ -119,18 +132,21 @@ iHouse/
 │   ├── components/
 │   │   ├── FloorPlan.tsx         # 户型图 + 区域锚点
 │   │   ├── AreaImageCanvas.tsx   # 区域图 + 物品位置标注
-│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩）
+│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩、维护周期）
+│   │   ├── SafeImage.tsx         # 图片带占位/兜底
 │   │   ├── ItemCard.tsx
 │   │   ├── TopBar.tsx / PageLayout.tsx / Empty.tsx
 │   │   ├── export/
 │   │   │   └── PdfPages.tsx      # PDF 各页组件（封面/户型/区域/物品）
 │   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print）
 │   ├── pages/                    # 路由页面
-│   ├── data/seed.ts              # 示例数据
-│   ├── lib/utils.ts
+│   ├── data/seed.ts              # 示例数据（含维护周期演示）
+│   ├── lib/utils.ts              # cn 类名合并
 │   ├── utils/
 │   │   ├── compressImage.ts      # 图片压缩
-│   │   └── image.ts
+│   │   ├── upload.ts             # 图片上传到服务器
+│   │   ├── maintenance.ts        # 维护状态计算（5 档）
+│   │   └── *.test.ts             # 单元测试
 │   ├── store.ts                  # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts          # 服务器优先 + IndexedDB 缓存适配器
 │   ├── uiStore.ts                # UI 状态（非持久化）
@@ -139,6 +155,7 @@ iHouse/
 │   └── index.css                 # Tailwind + @media print
 ├── server/
 │   ├── index.js                  # Express + better-sqlite3
+│   ├── utils.js                  # 后端工具（含测试）
 │   ├── package.json
 │   └── data/                     # SQLite 数据库（.gitignore）
 ├── docs/                         # 文档
