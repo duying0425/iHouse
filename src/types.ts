@@ -64,6 +64,10 @@ export interface Item {
   contents?: StorageEntry[];
   /** 使用说明（可选，如电视机/微波炉等设备的操作指引） */
   usage?: string;
+  /** 维护周期（天），如 180=半年、365=一年；不填表示无需定期维护 */
+  maintenanceCycle?: number;
+  /** 上次维护日期 YYYY-MM-DD；与 maintenanceCycle 配合计算下次到期 */
+  lastMaintenanceDate?: string;
 }
 
 /** 区域内的一张图（总图 / 设施图 / 某面墙等，每个区域可有一张或多张） */

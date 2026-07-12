@@ -10,6 +10,7 @@ import {
   Box,
   BookOpen,
   Layers,
+  CalendarClock,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
@@ -18,6 +19,12 @@ import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 import { CATEGORY_COLOR } from "@/types";
 import SafeImage from "@/components/SafeImage";
+import {
+  getMaintenanceStatus,
+  MAINTENANCE_STATUS_COLOR,
+  cycleLabel,
+  type MaintenanceStatus,
+} from "@/utils/maintenance";
 
 export default function ItemDetailPage() {
   const { areaId = "", itemId = "" } = useParams();
@@ -69,6 +76,10 @@ export default function ItemDetailPage() {
       areaImagePos: value.areaImagePos || undefined,
       contents: normalizeContents(value.contents),
       usage: value.usage.trim() || undefined,
+      maintenanceCycle: value.maintenanceCycle
+        ? Number(value.maintenanceCycle)
+        : undefined,
+      lastMaintenanceDate: value.lastMaintenanceDate || undefined,
     });
     setEditing(false);
   };
@@ -81,6 +92,15 @@ export default function ItemDetailPage() {
   };
 
   const color = CATEGORY_COLOR[found.category];
+
+  // 维护状态计算
+  const maintenance = found.maintenanceCycle
+    ? getMaintenanceStatus(found)
+    : null;
+  const isAlert =
+    maintenance?.status === "overdue" ||
+    maintenance?.status === "due-soon" ||
+    maintenance?.status === "pending-setup";
 
   return (
     <PageLayout
@@ -174,6 +194,14 @@ export default function ItemDetailPage() {
                 {found.brand && (
                   <p className="mt-1 text-sm text-ink/55">{found.brand}</p>
                 )}
+                {/* 维护状态徽标 */}
+                {maintenance && (
+                  <MaintenanceBadge
+                    status={maintenance.status}
+                    label={maintenance.label}
+                    nextDate={maintenance.nextDate}
+                  />
+                )}
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <button onClick={() => setEditing(true)} className="btn-secondary">
@@ -187,6 +215,34 @@ export default function ItemDetailPage() {
                 </button>
               </div>
             </div>
+
+            {/* 维护提醒高亮卡片（仅过期/即将到期时显示） */}
+            {isAlert && maintenance && (
+              <div
+                className="mt-4 flex items-center gap-2 rounded border px-3 py-2 text-xs"
+                style={{
+                  borderColor:
+                    MAINTENANCE_STATUS_COLOR[maintenance.status] + "55",
+                  background:
+                    MAINTENANCE_STATUS_COLOR[maintenance.status] + "12",
+                  color: MAINTENANCE_STATUS_COLOR[maintenance.status],
+                }}
+              >
+                <CalendarClock size={14} />
+                <span className="font-medium">{maintenance.label}</span>
+                {maintenance.nextDate && (
+                  <span className="text-ink/50">
+                    下次维护日：{maintenance.nextDate}
+                  </span>
+                )}
+                <button
+                  onClick={() => setEditing(true)}
+                  className="ml-auto text-2xs underline-offset-2 hover:underline"
+                >
+                  去更新
+                </button>
+              </div>
+            )}
 
             {/* 信息表 */}
             <dl className="mt-6 divide-y divide-line border-y border-line">
@@ -203,6 +259,24 @@ export default function ItemDetailPage() {
                 }
               />
               <InfoRow label="备注" value={found.remark} />
+              {found.maintenanceCycle && (
+                <InfoRow
+                  label="维护周期"
+                  value={cycleLabel(found.maintenanceCycle)}
+                />
+              )}
+              {found.lastMaintenanceDate && (
+                <InfoRow
+                  label="上次维护"
+                  value={found.lastMaintenanceDate}
+                />
+              )}
+              {maintenance?.nextDate && (
+                <InfoRow
+                  label="下次维护"
+                  value={maintenance.nextDate}
+                />
+              )}
             </dl>
 
             {/* 使用说明（多行） */}
@@ -346,5 +420,35 @@ function InfoRow({ label, value }: { label: string; value?: string }) {
         {value || <span className="text-ink/30">—</span>}
       </dd>
     </div>
+  );
+}
+
+/** 标题下方的维护状态小徽标 */
+function MaintenanceBadge({
+  status,
+  label,
+  nextDate,
+}: {
+  status: MaintenanceStatus;
+  label: string;
+  nextDate: string | null;
+}) {
+  if (status === "none") return null;
+  const color = MAINTENANCE_STATUS_COLOR[status];
+  return (
+    <span
+      className="mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-2xs font-medium"
+      style={{
+        borderColor: color + "55",
+        background: color + "12",
+        color,
+      }}
+    >
+      <CalendarClock size={11} />
+      {label}
+      {nextDate && status === "ok" && (
+        <span className="text-ink/40">· {nextDate}</span>
+      )}
+    </span>
   );
 }

@@ -1,11 +1,25 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Boxes, Download, Search, Settings, Sparkles } from "lucide-react";
+import { ArrowRight, Boxes, Download, Search, Settings, Sparkles, AlertTriangle, CalendarClock } from "lucide-react";
 import TopBar from "@/components/TopBar";
 import FloorPlan from "@/components/FloorPlan";
 import { useHomeStore } from "@/store";
 import { countItems } from "@/data/seed";
-import { CATEGORIES, CATEGORY_COLOR } from "@/types";
+import { CATEGORIES, CATEGORY_COLOR, type Area, type Item } from "@/types";
+import {
+  getMaintenanceStatus,
+  isMaintenanceAlert,
+  MAINTENANCE_STATUS_COLOR,
+  type MaintenanceStatus,
+} from "@/utils/maintenance";
+
+interface AlertEntry {
+  item: Item;
+  area: Area;
+  status: MaintenanceStatus;
+  label: string;
+  nextDate: string | null;
+}
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -35,6 +49,42 @@ export default function HomePage() {
 
     return { totalValue: value, categoryCounts: counts };
   }, [areas]);
+
+  // 维护提醒：收集所有需要提醒的物品，按紧急程度排序（overdue → due-soon → pending-setup）
+  const maintenanceAlerts = useMemo<AlertEntry[]>(() => {
+    const list: AlertEntry[] = [];
+    areas.forEach((area) => {
+      area.items.forEach((item) => {
+        if (!item.maintenanceCycle) return;
+        const r = getMaintenanceStatus(item);
+        if (isMaintenanceAlert(r.status)) {
+          list.push({
+            item,
+            area,
+            status: r.status,
+            label: r.label,
+            nextDate: r.nextDate,
+          });
+        }
+      });
+    });
+    const order: Record<MaintenanceStatus, number> = {
+      overdue: 0,
+      "due-soon": 1,
+      "pending-setup": 2,
+      ok: 3,
+      none: 4,
+    };
+    list.sort((a, b) => order[a.status] - order[b.status]);
+    return list;
+  }, [areas]);
+
+  const overdueCount = maintenanceAlerts.filter(
+    (a) => a.status === "overdue"
+  ).length;
+  const dueSoonCount = maintenanceAlerts.filter(
+    (a) => a.status === "due-soon"
+  ).length;
 
   return (
     <div className="min-h-screen">
@@ -143,6 +193,18 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
+
+            {/* 维护提醒面板（有过期/即将到期时显示） */}
+            {maintenanceAlerts.length > 0 && (
+              <MaintenanceAlertPanel
+                alerts={maintenanceAlerts}
+                overdueCount={overdueCount}
+                dueSoonCount={dueSoonCount}
+                onItemClick={(areaId, itemId) =>
+                  navigate(`/area/${areaId}/item/${itemId}`)
+                }
+              />
+            )}
 
             {/* 资产统计图表 */}
             {totalItems > 0 && (
@@ -261,6 +323,85 @@ function SectionHeader({
       </span>
       <h2 className="font-serif text-2xl font-semibold text-ink">{title}</h2>
       <p className="text-sm text-ink/55">{desc}</p>
+    </div>
+  );
+}
+
+/** 首页维护提醒面板：列出已过期/即将到期/待首次维护的物品 */
+function MaintenanceAlertPanel({
+  alerts,
+  overdueCount,
+  dueSoonCount,
+  onItemClick,
+}: {
+  alerts: AlertEntry[];
+  overdueCount: number;
+  dueSoonCount: number;
+  onItemClick: (areaId: string, itemId: string) => void;
+}) {
+  return (
+    <div className="card overflow-hidden border-ochre/30 shadow-card transition-all">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-2.5 bg-ochre/5">
+        <AlertTriangle size={14} className="text-ochre" />
+        <h3 className="font-serif text-sm font-semibold text-ink">维护提醒</h3>
+        <span className="text-2xs text-ink/55">
+          {overdueCount > 0 && (
+            <span className="text-red-700 font-medium">
+              {overdueCount} 件已过期
+            </span>
+          )}
+          {overdueCount > 0 && dueSoonCount > 0 && <span> · </span>}
+          {dueSoonCount > 0 && (
+            <span className="text-clay-600 font-medium">
+              {dueSoonCount} 件即将到期
+            </span>
+          )}
+        </span>
+      </div>
+      <ul className="divide-y divide-line max-h-64 overflow-y-auto">
+        {alerts.map(({ item, area, status, label, nextDate }) => {
+          const color = MAINTENANCE_STATUS_COLOR[status];
+          return (
+            <li key={item.id}>
+              <button
+                onClick={() => onItemClick(area.id, item.id)}
+                className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left hover:bg-clay-50/60 transition-colors"
+              >
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: color + "1A", color }}
+                >
+                  <CalendarClock size={13} />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink">
+                    {item.name}
+                  </p>
+                  <p className="truncate text-2xs text-ink/45">
+                    {area.name}
+                    {item.brand ? ` · ${item.brand}` : ""}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <span
+                    className="text-2xs font-medium"
+                    style={{ color }}
+                  >
+                    {label}
+                  </span>
+                  {nextDate && (
+                    <p className="text-2xs text-ink/40">{nextDate}</p>
+                  )}
+                </div>
+                <ArrowRight
+                  size={14}
+                  className="shrink-0 text-ink/30"
+                />
+              </button>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

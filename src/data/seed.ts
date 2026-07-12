@@ -106,6 +106,9 @@ export const seedHome: Home = {
           image: img("白色立式空调柜机产品图，圆柱造型"),
           areaImageId: "living-facility",
           areaImagePos: { x: 88, y: 30 },
+          // 滤网清洗：每半年一次；上次 2026-06-25，演示「即将到期」
+          maintenanceCycle: 180,
+          lastMaintenanceDate: "2026-06-25",
         },
       ],
     },
@@ -188,6 +191,9 @@ export const seedHome: Home = {
           image: img("白色壁挂空调室内机产品图，超薄"),
           areaImageId: "bedroom-facility",
           areaImagePos: { x: 60, y: 20 },
+          // 滤网清洗：每半年一次；上次 2025-12-01，演示「已过期」
+          maintenanceCycle: 180,
+          lastMaintenanceDate: "2025-12-01",
         },
       ],
     },
@@ -256,6 +262,9 @@ export const seedHome: Home = {
           image: img("黑色侧吸式抽油烟机产品图，大吸力"),
           areaImageId: "kitchen-facility",
           areaImagePos: { x: 55, y: 20 },
+          // 油网清洗：每季度一次；上次 2026-05-20，演示「即将到期」
+          maintenanceCycle: 90,
+          lastMaintenanceDate: "2026-05-20",
         },
         {
           id: "kitchen-cabinet",
@@ -305,6 +314,9 @@ export const seedHome: Home = {
           image: img("白色圆柱电热水器产品图，壁挂式"),
           areaImageId: "bathroom-facility",
           areaImagePos: { x: 25, y: 20 },
+          // 镁棒更换：每年一次；上次 2025-06-10，演示「已过期」
+          maintenanceCycle: 365,
+          lastMaintenanceDate: "2025-06-10",
         },
         {
           id: "bath-washer",

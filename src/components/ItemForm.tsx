@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box } from "lucide-react";
+import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
 import { CATEGORIES, type AnchorPosition, type Category, type Item, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
@@ -8,6 +8,7 @@ import { uploadImage } from "@/utils/upload";
 import { useHomeStore } from "@/store";
 import { genId } from "@/data/seed";
 import { cn } from "@/lib/utils";
+import { MAINTENANCE_PRESETS, getMaintenanceStatus } from "@/utils/maintenance";
 
 export interface ItemFormValue {
   name: string;
@@ -27,6 +28,10 @@ export interface ItemFormValue {
   contents: StorageEntry[];
   /** 使用说明（可选） */
   usage: string;
+  /** 维护周期（天），空字符串表示无 */
+  maintenanceCycle: string;
+  /** 上次维护日期 YYYY-MM-DD */
+  lastMaintenanceDate: string;
 }
 
 export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
@@ -44,6 +49,9 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     areaImagePos: item?.areaImagePos ?? null,
     contents: item?.contents?.map((c) => ({ ...c })) ?? [],
     usage: item?.usage ?? "",
+    maintenanceCycle:
+      item?.maintenanceCycle != null ? String(item.maintenanceCycle) : "",
+    lastMaintenanceDate: item?.lastMaintenanceDate ?? "",
   };
 }
 
@@ -410,6 +418,94 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
           />
         </Field>
 
+        {/* 维护提醒（可选）：周期 + 上次维护日期 */}
+        <div className="card overflow-hidden">
+          <div className="flex items-center gap-1.5 px-4 py-2.5 border-b border-line">
+            <CalendarClock size={14} className="text-ochre" />
+            <h4 className="font-serif text-sm font-semibold text-ink">
+              维护提醒
+            </h4>
+            <span className="text-2xs text-ink/45">定期维护的设备可在此设置</span>
+          </div>
+          <div className="px-4 py-3 space-y-3">
+            {/* 周期预设按钮 */}
+            <div>
+              <span className="mb-1.5 block text-2xs uppercase tracking-wider text-ink/50">
+                维护周期
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {MAINTENANCE_PRESETS.map((p) => {
+                  const active = value.maintenanceCycle === String(p.days);
+                  return (
+                    <button
+                      key={p.days}
+                      type="button"
+                      onClick={() => set("maintenanceCycle", String(p.days))}
+                      className={cn(
+                        "chip cursor-pointer",
+                        active && "chip-active"
+                      )}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+                <button
+                  type="button"
+                  onClick={() => set("maintenanceCycle", "")}
+                  className={cn(
+                    "chip cursor-pointer",
+                    value.maintenanceCycle === "" && "chip-active"
+                  )}
+                >
+                  无
+                </button>
+              </div>
+              {/* 自定义周期输入 */}
+              <div className="mt-2 flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  value={value.maintenanceCycle}
+                  onChange={(e) => set("maintenanceCycle", e.target.value)}
+                  placeholder="自定义天数"
+                  className="field w-32"
+                />
+                <span className="text-2xs text-ink/45">天</span>
+                {value.maintenanceCycle && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      set("maintenanceCycle", "")
+                    }
+                    className="ml-auto text-2xs text-ink/45 hover:text-ochre"
+                  >
+                    清除
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 上次维护日期 */}
+            <Field label="上次维护日期">
+              <input
+                type="date"
+                value={value.lastMaintenanceDate}
+                onChange={(e) => set("lastMaintenanceDate", e.target.value)}
+                className="field"
+              />
+            </Field>
+
+            {/* 状态预览 */}
+            {value.maintenanceCycle && (
+              <MaintenancePreview
+                cycle={Number(value.maintenanceCycle) || 0}
+                lastDate={value.lastMaintenanceDate}
+              />
+            )}
+          </div>
+        </div>
+
         {/* 储物单元内部物品清单（可选） */}
         <div className="card overflow-hidden">
           <button
@@ -574,5 +670,40 @@ function Field({
       </span>
       {children}
     </label>
+  );
+}
+
+/** 表单内维护状态实时预览（让用户填的时候能看到下次到期日） */
+function MaintenancePreview({
+  cycle,
+  lastDate,
+}: {
+  cycle: number;
+  lastDate: string;
+}) {
+  if (!cycle || cycle <= 0) return null;
+  const status = getMaintenanceStatus({
+    maintenanceCycle: cycle,
+    lastMaintenanceDate: lastDate || undefined,
+  });
+  const color =
+    status.status === "overdue"
+      ? "#B91C1C"
+      : status.status === "due-soon"
+      ? "#D97A3C"
+      : status.status === "pending-setup"
+      ? "#A86B3C"
+      : "#5C7A6A";
+  return (
+    <div
+      className="flex items-center gap-2 rounded border border-line bg-clay-50/60 px-3 py-2 text-2xs"
+      style={{ color }}
+    >
+      <CalendarClock size={12} />
+      <span className="font-medium">{status.label}</span>
+      {status.nextDate && (
+        <span className="text-ink/45">· 下次 {status.nextDate}</span>
+      )}
+    </div>
   );
 }
