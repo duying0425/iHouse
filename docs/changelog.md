@@ -21,6 +21,8 @@
 
 ## 2026-07-10 · docs: 更新所有文档反映维护提醒与最新架构
 
+**Commit**: `8fb419d`
+**背景**：维护提醒功能提交后，需要同步刷新 README/PRD/architecture/changelog，保证下一环境接入时文档与代码一致。
 **变更**：
 - `README.md`：功能清单加「物品档案」「维护提醒」「单元测试」；修正 PDF 描述（移除已删除的 html2canvas 慢方案）；技术栈移除 jsPDF/html2canvas；项目结构补 SafeImage/upload/maintenance/utils.js/docs/vitest.config.ts
 - `docs/PRD.md`：3.3 物品字段补全（使用说明/contents）；新增 3.4 维护提醒章节；数据模型补 maintenanceCycle/lastMaintenanceDate/contents/usage；从「不做」移除「维护周期提醒」（已实现）；后续方向加「主动通知」
