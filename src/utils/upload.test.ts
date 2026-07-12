@@ -36,7 +36,7 @@ describe("uploadImage utility", () => {
       json: async () => ({ url: "/api/images/uploaded_hash.png" })
     };
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
-    globalThis.fetch = mockFetch as any;
+    globalThis.fetch = mockFetch as typeof globalThis.fetch;
 
     const base64Input = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     const result = await uploadImage(base64Input);
@@ -56,7 +56,7 @@ describe("uploadImage utility", () => {
       ok: false
     };
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
-    globalThis.fetch = mockFetch as any;
+    globalThis.fetch = mockFetch as typeof globalThis.fetch;
 
     const base64Input = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     const result = await uploadImage(base64Input);
@@ -66,7 +66,7 @@ describe("uploadImage utility", () => {
 
   it("should fallback to base64 on network/fetch errors", async () => {
     const mockFetch = vi.fn().mockRejectedValue(new Error("Network Error"));
-    globalThis.fetch = mockFetch as any;
+    globalThis.fetch = mockFetch as typeof globalThis.fetch;
 
     const base64Input = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     const result = await uploadImage(base64Input);
