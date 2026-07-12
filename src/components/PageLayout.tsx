@@ -30,8 +30,8 @@ export default function PageLayout({
       <main
         className={
           wide
-            ? "container max-w-7xl py-8 animate-fadeIn"
-            : "container max-w-6xl py-8 animate-fadeIn"
+            ? "container max-w-7xl py-5 sm:py-8 animate-fadeIn"
+            : "container max-w-6xl py-5 sm:py-8 animate-fadeIn"
         }
       >
         {children}

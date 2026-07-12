@@ -222,7 +222,7 @@ export default function AreaDetailPage() {
                 value={kw}
                 onChange={(e) => setKw(e.target.value)}
                 placeholder="区域内检索"
-                className="w-44 rounded border border-line bg-cream py-1.5 pl-8 pr-7 text-xs text-ink placeholder:text-ink/35 focus:border-clay-400 focus:outline-none"
+                className="w-32 rounded border border-line bg-cream py-1.5 pl-8 pr-7 text-xs text-ink placeholder:text-ink/35 focus:border-clay-400 focus:outline-none sm:w-44"
               />
               {kw && (
                 <button

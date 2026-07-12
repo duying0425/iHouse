@@ -49,7 +49,7 @@
 
 ### 部署
 - **Docker 多阶段构建**：build 阶段 git clone + pnpm build + npm install；runtime 阶段仅 dist/ + server/
-- **Synology Container Manager**：只导入 compose YAML，Dockerfile 内 `git clone` 拉代码
+- **Synology Container Manager**：`nas-deploy/` 目录自包含，只导入 compose YAML，Dockerfile 内 `git clone` 拉代码
 
 ## 3. 关键设计
 
@@ -162,9 +162,9 @@ iHouse/
 │   ├── PRD.md
 │   ├── architecture.md
 │   └── changelog.md
-├── Dockerfile                    # 多阶段构建
-├── docker-compose.yml            # NAS 部署
-├── .dockerignore
+├── nas-deploy/                   # NAS 部署（自包含）
+│   ├── Dockerfile                # 多阶段构建（git clone → build → 运行）
+│   └── docker-compose.yml        # Container Manager 导入用
 ├── README.md
 ├── package.json / pnpm-lock.yaml
 ├── tsconfig.json / vite.config.ts
@@ -195,12 +195,16 @@ node server/index.js           # :3000，同时提供 API + 静态前端
 
 ### 5.3 Docker / NAS
 
+部署文件集中在 `nas-deploy/` 目录，自包含（不依赖本地源码，Dockerfile 内 `git clone` 拉取最新代码）。
+
 ```dockerfile
-# 多阶段：build 阶段 clone + 构建，runtime 阶段仅运行时
+# nas-deploy/Dockerfile — 多阶段：build 阶段 clone + 构建，runtime 阶段仅运行时
 FROM node:20-alpine AS build
 RUN apk add --no-cache git python3 make g++
 RUN corepack enable
-RUN git clone --depth=1 --branch main "https://github.com/duying0425/iHouse.git" /repo
+ARG GIT_REPO=https://github.com/duying0425/iHouse.git
+ARG GIT_BRANCH=main
+RUN git clone --depth=1 --branch ${GIT_BRANCH} "${GIT_REPO}" /repo
 WORKDIR /repo
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
@@ -208,12 +212,16 @@ WORKDIR /repo/server
 RUN npm install --omit=dev
 
 FROM node:20-alpine
+RUN apk add --no-cache wget
 WORKDIR /app
 COPY --from=build /repo/dist ./dist
 COPY --from=build /repo/server ./server
 ENV PORT=3000
 ENV DATA_DIR=/app/server/data
+ENV TZ=Asia/Shanghai
 EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD wget -qO- "http://localhost:${PORT}/api/health" || exit 1
 CMD ["node", "server/index.js"]
 ```
 
@@ -221,14 +229,14 @@ CMD ["node", "server/index.js"]
 - Synology Container Manager 只支持导入 compose YAML，不能执行命令
 - 因此 Dockerfile 内 `git clone` 拉代码，compose 文件只需 `build: { context: . }`
 - 数据卷挂载 `./data:/app/server/data`，重建容器不丢数据
-- 更新：代码推到 GitHub 后，在 Container Manager 对项目点「重建」
+- 更新：代码推到 GitHub 后，在 Container Manager 对项目停止 → 构建 → 启动
 
 ## 6. 数据迁移与备份
 
 ### 6.1 跨环境迁移
-- **方式一**：直接拷贝 `server/data/home.db` 到新环境同路径
-- **方式二**：「设置 → 数据维护 → 导出 JSON」，新环境「导入备份」
-- **方式三**：浏览器 IndexedDB 缓存会在首次访问时自动读取并同步到新服务器（适合纯前端迁移）
+- **方式一（推荐，完整迁移）**：直接拷贝 `server/data/` 整个目录到新环境（含 `home.db` + `images/`）。NAS 部署时打包为 zip 通过 File Station 上传解压。
+- **方式二（仅结构数据）**：「设置 → 数据维护 → 导出 JSON」，新环境「导入备份」。⚠️ 图片已提取为独立文件，JSON 不含图片数据，需单独拷贝 `images/` 目录。
+- **方式三（纯前端迁移）**：浏览器 IndexedDB 缓存会在首次访问时自动读取并同步到新服务器（不含图片文件）
 
 ### 6.2 Schema 迁移
 persist 中间件 `version: 2` + `migrate` 函数自动处理 v1 → v2：

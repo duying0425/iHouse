@@ -1,0 +1,39 @@
+# 居所图鉴 (iHouse) — Synology NAS Container Manager 部署
+#
+# 使用方法：
+# 1. 将整个 nas-deploy/ 文件夹上传到 NAS（例如 /docker/ihouse/）
+# 2. Container Manager → 项目 → 新增 → 填写项目名 → 路径选 nas-deploy/ 所在目录
+#    → 来源选「使用已有的 docker-compose.yml」→ 创建并启动
+# 3. 首次构建需要 3-5 分钟（git clone + pnpm build + better-sqlite3 编译）
+# 4. 访问 http://<NAS_IP>:8180
+#
+# 更新方法：Container Manager → 选中项目 → 停止 → 构建 → 启动
+#   （会重新 git clone 最新代码并构建）
+#
+# 数据持久化：SQLite 数据库 + 图片文件存放在 ./data 目录，重建容器不丢失。
+# 如需备份，复制整个 data/ 目录即可。
+#
+# 导入已有数据：将本地 server/data/ 目录打包为 data.zip（含 home.db + images/），
+#   用 File Station 上传到本目录并解压为 data/ 文件夹，再启动容器即可。
+#   ⚠️ 需 home.db 和 images/ 一并拷贝，仅导入 JSON 会丢失图片。
+
+services:
+  ihouse:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ihouse:latest
+    container_name: ihouse
+    restart: unless-stopped
+    ports:
+      - "8180:3000"
+    volumes:
+      - ./data:/app/server/data
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3

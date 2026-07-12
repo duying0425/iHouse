@@ -83,6 +83,31 @@ body {
   background: #b97e4f;
 }
 
+/* ===== 移动端适配 ===== */
+/* 防止 iOS 输入框聚焦时自动放大页面（需 >= 16px） */
+@media (max-width: 640px) {
+  .field,
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="url"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* 底部安全区域（iPhone 底部横条 / 全面屏手势条） */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* 移动端底部固定操作栏 */
+.action-bar {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 /* 脉冲锚点 */
 .pulse-dot {
   position: relative;

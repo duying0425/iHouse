@@ -85,14 +85,14 @@ export default function ItemFormPage() {
 
       <ItemForm value={value} onChange={setValue} areaId={areaId} />
 
-      <div className="mt-8 flex items-center justify-end gap-2 border-t border-line pt-5">
-        <Link to={`/area/${areaId}`} className="btn-secondary">
-          <X size={15} /> 取消
+      <div className="action-bar sticky bottom-0 z-20 -mb-5 mt-8 flex items-center gap-2 border-t border-line bg-paper/95 py-3 backdrop-blur-md sm:-mb-8 sm:justify-end">
+        <Link to={`/area/${areaId}`} className="btn-secondary shrink-0">
+          <X size={15} /> <span className="hidden sm:inline">取消</span>
         </Link>
         <button
           onClick={handleSave}
           disabled={!value.name.trim() || saving}
-          className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+          className="btn-primary flex-1 sm:flex-none disabled:cursor-not-allowed disabled:opacity-40"
         >
           <Save size={15} /> {saving ? "保存中…" : "保存入库"}
         </button>

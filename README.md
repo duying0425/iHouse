@@ -104,16 +104,17 @@ node server/index.js       # 启动服务（同时提供前端静态文件 + API
 
 ## Docker / NAS 部署
 
-项目支持 Docker 部署，适配 Synology Container Manager（只支持导入 compose YAML、不能执行命令的场景）。
+项目提供独立的 `nas-deploy/` 部署目录，适配 Synology Container Manager（只支持导入 compose YAML、不能执行命令的场景）。
 
-**NAS 上准备一个目录**（如 `/docker/ihouse/`），放入从仓库获取的 `Dockerfile` 和 `docker-compose.yml` 两个文件，然后在 Container Manager 导入 compose 文件即可。Dockerfile 会自动 `git clone` 仓库并构建。
+**NAS 上准备一个目录**（如 `/docker/ihouse/`），将仓库 `nas-deploy/` 文件夹内的 `Dockerfile` 和 `docker-compose.yml` 上传到该目录，然后在 Container Manager 导入 compose 文件即可。Dockerfile 会自动 `git clone` 仓库并构建。
 
 ```yaml
-# docker-compose.yml
+# nas-deploy/docker-compose.yml
 services:
   ihouse:
     build:
       context: .
+      dockerfile: Dockerfile
     image: ihouse:latest
     container_name: ihouse
     restart: unless-stopped
@@ -121,11 +122,36 @@ services:
       - "8180:3000"
     volumes:
       - ./data:/app/server/data
+    environment:
+      - TZ=Asia/Shanghai
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 ```
 
 - 访问：`http://<NAS_IP>:8180`
-- 数据持久化：`./data` 目录（SQLite 数据库文件），重建容器不丢失
-- 更新：代码推到 GitHub 后，在 Container Manager 对项目点「重建」
+- 数据持久化：`./data` 目录（SQLite 数据库 + 图片文件），重建容器不丢失
+- 更新：代码推到 GitHub 后，在 Container Manager 对项目停止 → 构建 → 启动
+
+### 将现有数据导入 NAS
+
+本地已录入的数据需要一并迁移到 NAS，包括 **SQLite 数据库** 和 **图片文件** 两部分（缺一不可）。
+
+> ⚠️ 仅导出 JSON 备份是不够的 — 图片已提取为独立文件存储在 `images/` 目录，不在 JSON 中。JSON 导入只会恢复结构数据，图片会丢失。
+
+**迁移步骤**：
+
+1. **打包本地数据**：将项目 `server/data/` 目录打包为 `data.zip`
+   - 内含 `home.db`（SQLite 数据库）和 `images/` 文件夹（所有图片文件）
+2. **上传到 NAS**：用 Synology File Station 将 `data.zip` 上传到项目目录（如 `/docker/ihouse/`）
+3. **解压**：File Station 中右键 `data.zip` → 解压 → 解压到 `data/` 文件夹
+   - 确认目录结构为 `/docker/ihouse/data/home.db` 和 `/docker/ihouse/data/images/`
+4. **启动容器**：在 Container Manager 中启动项目，容器会自动读取 `data/` 中的数据
+
+> 如果容器已在运行，需先 **停止** → 替换 `data/` 目录内容 → 再 **启动**。
 
 ## 数据存储说明
 
@@ -160,8 +186,7 @@ services:
 │   ├── utils.js          # 后端工具函数（含单元测试）
 │   └── package.json
 ├── docs/                 # 文档（PRD / 架构 / 迭代记录）
-├── Dockerfile            # 多阶段构建（clone → 前端 build → 后端 install → node 运行）
-├── docker-compose.yml    # NAS 部署用
+├── nas-deploy/           # NAS 部署（Dockerfile + docker-compose.yml，自包含 git clone 构建）
 ├── vitest.config.ts      # 单元测试配置
 └── vite.config.ts        # 含 /api 代理配置
 ```

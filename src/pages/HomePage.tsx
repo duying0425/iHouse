@@ -92,13 +92,13 @@ export default function HomePage() {
 
       {/* Hero 杂志式标题 */}
       <section className="border-b border-line bg-cream/60">
-        <div className="container max-w-6xl py-10">
+        <div className="container max-w-6xl py-6 sm:py-10">
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div className="max-w-2xl animate-fadeUp">
               <span className="inline-flex items-center gap-1.5 text-2xs uppercase tracking-[0.2em] text-clay-500">
                 <Sparkles size={12} /> Home Atlas
               </span>
-              <h1 className="mt-3 font-serif text-4xl font-semibold leading-tight text-ink md:text-5xl">
+              <h1 className="mt-3 font-serif text-3xl font-semibold leading-tight text-ink sm:text-4xl md:text-5xl">
                 {title}
               </h1>
               <p className="mt-3 text-sm text-ink/55">
@@ -124,7 +124,7 @@ export default function HomePage() {
       </section>
 
       {/* 户型图主体 */}
-      <main className="container max-w-6xl py-10 animate-fadeIn">
+      <main className="container max-w-6xl py-6 sm:py-10 animate-fadeIn">
         <SectionHeader
           eyebrow="01 · Floor Plan"
           title="户型平面总览"

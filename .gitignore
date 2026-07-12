@@ -28,3 +28,9 @@ dist-ssr
 
 # Trae IDE 内部文件
 .trae
+
+# 本地开发用的便携 Node（better-sqlite3 ABI 兼容）
+node*.exe
+
+# server 目录用 npm，不应有 pnpm-lock
+server/pnpm-lock.yaml

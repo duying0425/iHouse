@@ -123,21 +123,21 @@ export default function ItemDetailPage() {
       {editing ? (
         <>
           <ItemForm value={value} onChange={setValue} areaId={areaId} />
-          <div className="mt-8 flex items-center justify-end gap-2 border-t border-line pt-5">
-            <button onClick={() => setEditing(false)} className="btn-secondary">
-              <X size={15} /> 取消
+          <div className="action-bar sticky bottom-0 z-20 -mb-5 mt-8 flex items-center gap-2 border-t border-line bg-paper/95 py-3 backdrop-blur-md sm:-mb-8 sm:justify-end">
+            <button onClick={() => setEditing(false)} className="btn-secondary shrink-0">
+              <X size={15} /> <span className="hidden sm:inline">取消</span>
             </button>
             <button
               onClick={handleSave}
               disabled={!value.name.trim()}
-              className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+              className="btn-primary flex-1 sm:flex-none disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Save size={15} /> 保存修改
             </button>
           </div>
         </>
       ) : (
-        <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
+        <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8">
           {/* 左：照片与相册 */}
           <div className="space-y-4">
             <div className="card overflow-hidden">
@@ -169,7 +169,7 @@ export default function ItemDetailPage() {
                     ({found.gallery.length} 张图片)
                   </span>
                 </h3>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {found.gallery.map((img, idx) => (
                     <button
                       key={idx}

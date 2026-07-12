@@ -171,7 +171,7 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
   const currentImage = images.find((i) => i.id === value.areaImageId) ?? images[0];
 
   return (
-    <div className="grid gap-8 lg:grid-cols-[1fr_1.1fr]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8">
       {/* 左：照片 */}
       <div className="space-y-4">
         <div className="card overflow-hidden">
@@ -345,7 +345,7 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
           <Field label="分类">
             <select
               value={value.category}
@@ -378,7 +378,7 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
           <Field label="购入日期">
             <input
               type="date"
@@ -540,29 +540,31 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
               )}
 
               {value.contents.map((c) => (
-                <div key={c.id} className="flex flex-wrap items-center gap-2">
+                <div key={c.id} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <input
                     value={c.name}
                     onChange={(e) => updateContent(c.id, { name: e.target.value })}
                     placeholder="物品名称（如：电池）"
-                    className="field min-w-[8rem] flex-1"
+                    className="field w-full sm:min-w-[8rem] sm:flex-1"
                   />
-                  <input
-                    value={c.quantity ?? ""}
-                    onChange={(e) => updateContent(c.id, { quantity: e.target.value })}
-                    placeholder="数量"
-                    className="field w-20"
-                  />
-                  <input
-                    value={c.remark ?? ""}
-                    onChange={(e) => updateContent(c.id, { remark: e.target.value })}
-                    placeholder="备注（可选）"
-                    className="field min-w-[8rem] flex-[2]"
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      value={c.quantity ?? ""}
+                      onChange={(e) => updateContent(c.id, { quantity: e.target.value })}
+                      placeholder="数量"
+                      className="field w-20 flex-1 sm:flex-none"
+                    />
+                    <input
+                      value={c.remark ?? ""}
+                      onChange={(e) => updateContent(c.id, { remark: e.target.value })}
+                      placeholder="备注（可选）"
+                      className="field min-w-0 flex-[2] sm:min-w-[8rem]"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeContent(c.id)}
-                    className="btn-ghost text-ochre hover:bg-ochre/10"
+                    className="btn-ghost self-start text-ochre hover:bg-ochre/10"
                     title="删除该条"
                   >
                     <Trash2 size={14} />
