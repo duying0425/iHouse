@@ -2,6 +2,22 @@
 
 > 按时间倒序，最近在上。
 
+## 2026-07-13 · feat(api): 新增 /api/query/* 结构化查询接口 + 测试完善
+
+**Commit**: `8fcd00e` / `（本次）`
+**背景**：基础 API `/api/home` 返回完整 JSON blob，适合前端整体加载；但未来接入 AI 助手（"电池在哪个抽屉？""哪些设备该维护了？"）需要精简、可过滤的语义端点。
+**变更**：
+- `server/index.js`：新增 6 个查询端点（summary/areas/areas/:id/items/items/:id/locations），支持 `?area=&category=&brand=&q=` 组合过滤
+- `src/components/ItemForm.tsx`：图片上传区和附属图册区分别新增独立的「拍照」按钮（`capture="environment"` 调起后置摄像头），解决 Edge mobile 不带 capture 时不提供拍照选项的问题
+- **本次新增**：
+  - `server/query.js`：将查询逻辑从路由层抽为纯函数模块（buildSummary/listAreas/getAreaById/searchItems/getItemById/listLocations），不依赖 DB 与 HTTP，便于未来 AI Agent 直接 import 复用与单元测试
+  - `server/index.js` 路由层重构为「读 DB → 调用纯函数 → 附带 updatedAt」的薄包装
+  - `server/query.test.js`：新增 34 个测试用例，覆盖空 home 容错、分类/品牌/关键词组合过滤、储物单元 contents 搜索、Top 10 截断、404 路径、字段完整性等
+- 文档同步更新：README / PRD / architecture / changelog
+**效果**：测试总数 41 → 75（+34）；后端测试覆盖从 utils.js 扩展到 query.js；为 AI 接入预留数据访问层。
+
+---
+
 ## 2026-07-10 · feat(maintenance): 新增物品维护提醒功能
 
 **Commit**: `cd6ac2a`

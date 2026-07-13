@@ -1,6 +1,6 @@
 # iHouse · 居所图鉴 — 技术架构文档
 
-> 版本：v2 · 最后更新：2026-07-01
+> 版本：v3 · 最后更新：2026-07-13
 
 ## 1. 总体架构
 
@@ -13,15 +13,24 @@
 │  │  ├─ serverStorage 适配器（服务器优先+IDB缓存） │  │
 │  │  └─ IndexedDB（本地缓存/离线兜底）            │  │
 │  └───────────────────────────────────────────────┘  │
-│              ↕ HTTP (/api/home)                      │
+│              ↕ HTTP (/api/home, /api/upload)          │
 └─────────────────────────────────────────────────────┘
                   ↕
 ┌─────────────────────────────────────────────────────┐
 │  Node.js 服务端（Express）                          │
+│  基础数据 API                                       │
 │  ├─ GET  /api/home      读取全部数据                │
 │  ├─ PUT  /api/home      整体覆盖写入                │
+│  ├─ POST /api/upload    单张图片上传                │
 │  ├─ GET  /api/health    健康检查                    │
-│  └─ 静态文件服务（dist/，SPA fallback）             │
+│  结构化查询 API（/api/query/*，未来 AI 接入用）     │
+│  ├─ GET  /query/summary      全屋概览               │
+│  ├─ GET  /query/areas        区域列表                │
+│  ├─ GET  /query/areas/:id    区域详情                │
+│  ├─ GET  /query/items        物品搜索                │
+│  ├─ GET  /query/items/:id    物品详情                │
+│  └─ GET  /query/locations    位置索引                │
+│  ├─ 静态文件服务（dist/，SPA fallback）             │
 │              ↕                                       │
 │  SQLite（better-sqlite3，WAL 模式）                 │
 │  └─ home 表：单行（id=1）存全量 JSON                │
@@ -29,6 +38,7 @@
               ↕ 挂载 volume
 ┌─────────────────────────────────────────────────────┐
 │  ./data/home.db  （持久化，NAS 上挂载到卷）         │
+│  ./data/images/ （已上传的图片文件）                │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -45,7 +55,9 @@
 ### 后端
 - **Node.js 20 + Express**：HTTP 服务
 - **better-sqlite3**：同步 SQLite 驱动，WAL 模式提升并发
-- 单文件 `server/index.js`，约 85 行，零冗余
+- `server/index.js` 路由层（约 150 行）
+- `server/utils.js`：Base64 提取工具（含单元测试）
+- `server/query.js`：结构化查询纯函数模块（含单元测试），未来 AI 工具可直接复用
 
 ### 部署
 - **Docker 多阶段构建**：build 阶段 COPY 本地源码 + pnpm build + npm install；runtime 阶段仅 dist/ + server/
@@ -111,7 +123,32 @@ zustand + persist 中间件，关键点：
 
 **测试**：`src/utils/maintenance.test.ts` 24 个用例覆盖状态计算、跨年/闰年日期、边界条件、文案生成。
 
-### 3.6 路由与页面
+### 3.6 结构化查询 API（AI 接入预留）
+
+**模块**：`server/query.js`（纯函数）+ `server/index.js` 路由层
+
+**背景**：基础 API `/api/home` 返回整个 JSON blob，对人类前端够用，但 AI 工具调用需要精简、可过滤的语义端点。新增 `/api/query/*` 一组接口作为未来智能化的数据访问层。
+
+**设计要点**：
+- **纯函数 + 路由层分离**：核心查询逻辑（`buildSummary` / `listAreas` / `getAreaById` / `searchItems` / `getItemById` / `listLocations`）抽到 `server/query.js` 作为纯函数，不依赖数据库与 HTTP，路由层只负责读取 DB、调用纯函数、附带 `updatedAt`。便于单元测试，也便于未来 AI Agent 直接 `import` 复用。
+- **统一返回格式**：`{ ok, ..., updatedAt }`，调用方可判断数据新鲜度
+- **物品搜索**：关键词匹配覆盖 名称 / 品牌 / 规格 / 备注 / 使用说明 / 储物单元内部清单（contents），全小写子串匹配
+- **位置索引**：`/api/query/locations` 专为"东西放哪了"类查询设计，精简字段（itemId / name / areaName / areaImagePos / contents）
+
+**端点清单**：
+
+| 端点 | 参数 | 用途 |
+|---|---|---|
+| `GET /api/query/summary` | - | 全屋概览（区域数/物品数/分类分布/Top 品牌/需维护数） |
+| `GET /api/query/areas` | `?withItems=1` | 区域列表（默认精简，不含物品） |
+| `GET /api/query/areas/:areaId` | - | 区域详情 |
+| `GET /api/query/items` | `?area=&category=&brand=&q=` | 物品搜索（组合过滤） |
+| `GET /api/query/items/:itemId` | - | 物品详情 + 所属区域 + 区域图位置 |
+| `GET /api/query/locations` | `?area=&category=` | 物品位置索引 |
+
+**测试**：`server/query.test.js` 34 个用例，覆盖空 home 容错、分类/品牌/关键词组合过滤、储物单元 contents 搜索、Top 10 截断、404 路径、字段完整性等。
+
+### 3.7 路由与页面
 
 ```
 /                → 首页（户型图 + 区域列表 + 维护提醒面板）
@@ -154,10 +191,13 @@ iHouse/
 │   ├── App.tsx / main.tsx
 │   └── index.css                 # Tailwind + @media print
 ├── server/
-│   ├── index.js                  # Express + better-sqlite3
-│   ├── utils.js                  # 后端工具（含测试）
+│   ├── index.js                  # Express + better-sqlite3，路由层
+│   ├── utils.js                  # Base64 提取工具（含测试）
+│   ├── query.js                  # 结构化查询纯函数（summary/areas/items/locations）
+│   ├── utils.test.js             # utils.js 测试
+│   ├── query.test.js             # query.js 测试（34 个用例）
 │   ├── package.json
-│   └── data/                     # SQLite 数据库（.gitignore）
+│   └── data/                     # SQLite 数据库 + 图片文件（.gitignore）
 ├── docs/                         # 文档
 │   ├── PRD.md
 │   ├── architecture.md
