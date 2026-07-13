@@ -16,6 +16,8 @@ import { useAuthStore } from "@/authStore";
 
 /* ===== 当前房屋上下文 ===== */
 let currentHouseId: string | null = null;
+// 标记：正在 reload 房屋数据期间，禁止 setItem 把 seed/空数据同步到服务器
+let isReloading = false;
 
 export function setHouseContext(houseId: string | null) {
   currentHouseId = houseId;
@@ -23,6 +25,10 @@ export function setHouseContext(houseId: string | null) {
 
 export function getCurrentHouseId() {
   return currentHouseId;
+}
+
+export function setReloading(v: boolean) {
+  isReloading = v;
 }
 
 /** 带 token 的 fetch；token 缺失时仍发请求（让后端 401 拦截） */
@@ -184,7 +190,14 @@ export const serverStorage: StateStorage = {
       if (res.ok) {
         const state = await res.json();
         if (state && state.areas !== undefined) {
-          const wrapped = JSON.stringify({ state, version: 2 });
+          // 检测是否是 v1 格式（旧字段存在但 images 数组缺失）
+          // v1: area 有 overviewImage/detailImage 字段，无 images 数组
+          // v2: area 有 images 数组
+          const isV1 = Array.isArray(state.areas) && state.areas.some(
+            (a: { overviewImage?: unknown; detailImage?: unknown; images?: unknown[] }) =>
+              (a.overviewImage || a.detailImage) && !Array.isArray(a.images)
+          );
+          const wrapped = JSON.stringify({ state, version: isV1 ? 1 : 2 });
           // 刷新本地缓存
           idbCache.setItem(cacheKey(name), wrapped);
           return wrapped;
@@ -199,6 +212,8 @@ export const serverStorage: StateStorage = {
   },
   async setItem(name, value) {
     if (!currentHouseId) return;
+    // reload 期间不写缓存也不同步（防止 seed 覆盖真实数据）
+    if (isReloading) return;
     // 立即写本地缓存
     idbCache.setItem(cacheKey(name), value);
     // 防抖同步到服务器

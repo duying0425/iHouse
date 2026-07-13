@@ -10,7 +10,7 @@ import type {
   SearchResult,
 } from "@/types";
 import { cloneSeed, collectBrands, genId } from "@/data/seed";
-import { serverStorage } from "@/serverStorage";
+import { serverStorage, setReloading } from "@/serverStorage";
 
 /**
  * 持久化存储：服务器优先 + 本地 IndexedDB 缓存。
@@ -74,9 +74,14 @@ export const useHomeStore = create<HomeState>()(
 
       reloadCurrentHouse: async () => {
         // 切换房屋时：先重置为空状态，标记为未水合，再触发 persist 重新拉取
+        // 用 isReloading 标志防止 set 触发 setItem 把 seed 同步到服务器
+        setReloading(true);
         set({ ...cloneSeed(), _hasHydrated: false });
-        // 让 persist 中间件重新走一遍 getItem 流程
-        await useHomeStore.persist.rehydrate();
+        try {
+          await useHomeStore.persist.rehydrate();
+        } finally {
+          setReloading(false);
+        }
       },
 
       getArea: (areaId) => get().areas.find((a) => a.id === areaId),
@@ -312,6 +317,9 @@ export const useHomeStore = create<HomeState>()(
       name: "home-atlas",
       version: 2,
       storage: createJSONStorage(() => serverStorage),
+      // 禁用自动 rehydrate：由 App.tsx 监听 currentHouseId 后手动触发
+      // 避免 currentHouseId 为空时的无意义 rehydrate 与后续竞态
+      skipHydration: true,
       migrate: (persistedState: unknown, fromVersion: number) => {
         const state = (persistedState || {}) as Partial<Home>;
         if (fromVersion < 2 && state.areas) {
