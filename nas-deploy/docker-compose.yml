@@ -1,17 +1,17 @@
-# 居所图鉴 (iHouse) — Synology NAS Container Manager 部署
+# 居所图鉴 (iHouse) — Synology NAS 部署（本地源码构建）
 #
 # 使用方法：
-# 1. 将整个 nas-deploy/ 文件夹上传到 NAS（例如 /docker/ihouse/）
-# 2. Container Manager → 项目 → 新增 → 填写项目名 → 路径选 nas-deploy/ 所在目录
-#    → 来源选「使用已有的 docker-compose.yml」→ 创建并启动
-# 3. 首次构建需要 3-5 分钟（git clone + pnpm build + better-sqlite3 编译）
+# 1. 在 NAS 上 git clone 本仓库（例如到 /volume1/docker/ihouse/）
+#    git clone https://github.com/duying0425/iHouse.git /volume1/docker/ihouse
+# 2. 进入 nas-deploy/ 目录：cd /volume1/docker/ihouse/nas-deploy
+# 3. 首次启动：docker compose up -d --build
+#    首次构建需要 3-5 分钟（pnpm build + better-sqlite3 编译）
 # 4. 访问 http://<NAS_IP>:8180
 #
-# 更新方法：
-#   1. 先把下方 CACHEBUST 的值改成任意新值（如日期 20260713-1），保存
-#   2. Container Manager → 选中项目 → 停止 → 构建 → 启动
-#   改 CACHEBUST 是为了打破 Docker 缓存，强制重新 git clone 最新代码
-#   （否则缓存命中会复用旧代码层，不会重新拉取）
+# 更新方法（手动拉取最新代码后重建）：
+#   cd /volume1/docker/ihouse && git pull && cd nas-deploy
+#   docker compose build && docker compose up -d
+#   本地源码有变更，Docker 会自动重新构建，无需 --no-cache。
 #
 # 数据持久化：SQLite 数据库 + 图片文件存放在 ./data 目录，重建容器不丢失。
 # 如需备份，复制整个 data/ 目录即可。
@@ -23,11 +23,9 @@
 services:
   ihouse:
     build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        # 更新代码时改这个值（任意字符串，如日期）即可强制重新拉取源码
-        CACHEBUST: "v1"
+      # 构建上下文 = 仓库根目录（nas-deploy 的上一级），Dockerfile 用 COPY 读取本地源码
+      context: ..
+      dockerfile: nas-deploy/Dockerfile
     image: ihouse:latest
     container_name: ihouse
     restart: unless-stopped

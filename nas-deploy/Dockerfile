@@ -1,26 +1,23 @@
 # syntax=docker/dockerfile:1
 
 # 居所图鉴 (iHouse) NAS 部署镜像
-# 此 Dockerfile 会从 GitHub 自动拉取最新代码并构建，无需本地源码。
-# 配合同目录 docker-compose.yml 使用，详见其中的部署说明。
+# 使用本地源码构建（构建上下文 = 仓库根目录，由 docker-compose.yml 指定）。
+# 部署流程：在 NAS 上 git clone 本仓库 → 进入 nas-deploy/ → docker compose up -d --build
+# 更新流程：git pull 拉最新代码 → docker compose build → docker compose up -d
 
 # ===== 构建阶段 =====
 FROM node:20-alpine AS build
 
-# git: clone 仓库；python3/make/g++: better-sqlite3 原生编译
-RUN apk add --no-cache git python3 make g++
+# python3/make/g++: better-sqlite3 原生编译
+RUN apk add --no-cache python3 make g++
 # 固定 pnpm 版本：pnpm 11+ 需要 Node 22，本镜像为 Node 20
 RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 
-# CACHEBUST：更新代码时在 docker-compose.yml 中改这个值即可打破缓存重新拉取源码
-ARG CACHEBUST=1
-# clone 仓库（浅克隆，可通过 build-arg 切换分支）
-ARG GIT_REPO=https://github.com/duying0425/iHouse.git
-ARG GIT_BRANCH=main
-RUN echo "cache bust: $CACHEBUST" && git clone --depth=1 --branch ${GIT_BRANCH} "${GIT_REPO}" /repo
+# 复制本地源码（根目录 .dockerignore 已排除 node_modules/dist/.git/server/data 等）
+WORKDIR /repo
+COPY . .
 
 # 构建前端
-WORKDIR /repo
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 
