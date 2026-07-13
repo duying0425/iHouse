@@ -9,7 +9,8 @@ FROM node:20-alpine AS build
 
 # git: clone 仓库；python3/make/g++: better-sqlite3 原生编译
 RUN apk add --no-cache git python3 make g++
-RUN corepack enable
+# 固定 pnpm 版本：pnpm 11+ 需要 Node 22，本镜像为 Node 20
+RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 
 # clone 仓库（浅克隆，可通过 build-arg 切换分支）
 ARG GIT_REPO=https://github.com/duying0425/iHouse.git
