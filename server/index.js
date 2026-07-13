@@ -150,6 +150,167 @@ app.put("/api/home", (req, res) => {
   res.json({ ok: true, data: homeData, updated_at: now });
 });
 
+/* ============ 结构化查询 API ============ */
+/* 为未来接入 AI 智能化提供精简、可检索的数据访问层。
+ * 与 /api/home（返回完整 JSON blob）不同，这里按语义维度切分，
+ * 支持按区域 / 分类 / 品牌 / 关键词过滤，便于 LLM 工具调用。
+ */
+
+// 从数据库读取并解析 home 数据；同时返回 updated_at
+function getHomeRow() {
+  const row = db.prepare("SELECT data, updated_at FROM home WHERE id = 1").get();
+  if (!row || !row.data) return null;
+  try {
+    return { home: JSON.parse(row.data), updatedAt: row.updated_at };
+  } catch {
+    return null;
+  }
+}
+
+// 全屋概览：区域数、物品数、分类分布、Top 品牌、需维护数等
+app.get("/api/query/summary", (_req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  const { home, updatedAt } = row;
+  const areas = home.areas ?? [];
+  const items = areas.flatMap((a) => a.items ?? []);
+
+  const categoryCount = {};
+  const brandCount = {};
+  let needsMaintenance = 0;
+
+  for (const it of items) {
+    if (it.category) categoryCount[it.category] = (categoryCount[it.category] ?? 0) + 1;
+    if (it.brand) brandCount[it.brand] = (brandCount[it.brand] ?? 0) + 1;
+    if (it.maintenanceCycle) needsMaintenance += 1;
+  }
+
+  res.json({
+    ok: true,
+    title: home.title,
+    subtitle: home.subtitle,
+    areaCount: areas.length,
+    itemCount: items.length,
+    categories: categoryCount,
+    topBrands: Object.entries(brandCount)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([name, count]) => ({ name, count })),
+    needsMaintenance,
+    updatedAt,
+  });
+});
+
+// 区域列表：默认精简（不含物品），?withItems=1 时附带物品
+app.get("/api/query/areas", (req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  const withItems = req.query.withItems === "1";
+  const areas = (row.home.areas ?? []).map((a) => {
+    const base = {
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      itemCount: (a.items ?? []).length,
+      imageCount: (a.images ?? []).length,
+      floorPlanPos: a.floorPlanPos,
+    };
+    if (withItems) base.items = a.items ?? [];
+    return base;
+  });
+  res.json({ ok: true, areas, updatedAt: row.updatedAt });
+});
+
+// 单个区域详情：含物品与区域图
+app.get("/api/query/areas/:areaId", (req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  const area = (row.home.areas ?? []).find((a) => a.id === req.params.areaId);
+  if (!area) return res.status(404).json({ ok: false, error: "area not found" });
+  res.json({ ok: true, area, updatedAt: row.updatedAt });
+});
+
+// 物品列表 / 搜索：支持 ?area=, ?category=, ?brand=, ?q= 组合过滤
+app.get("/api/query/items", (req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  const { area, category, brand, q } = req.query;
+  const keyword = typeof q === "string" ? q.trim().toLowerCase() : "";
+
+  const results = [];
+  for (const a of row.home.areas ?? []) {
+    if (area && a.id !== area) continue;
+    for (const it of a.items ?? []) {
+      if (category && it.category !== category) continue;
+      if (brand && it.brand !== brand) continue;
+      if (keyword) {
+        const haystack = [
+          it.name,
+          it.brand,
+          it.spec,
+          it.remark,
+          it.usage,
+          ...(it.contents ?? []).map((c) => `${c.name} ${c.quantity ?? ""} ${c.remark ?? ""}`),
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(keyword)) continue;
+      }
+      results.push({ ...it, areaId: a.id, areaName: a.name });
+    }
+  }
+  res.json({ ok: true, count: results.length, items: results, updatedAt: row.updatedAt });
+});
+
+// 单个物品详情：附带所属区域信息
+app.get("/api/query/items/:itemId", (req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  for (const a of row.home.areas ?? []) {
+    const item = (a.items ?? []).find((i) => i.id === req.params.itemId);
+    if (item) {
+      return res.json({
+        ok: true,
+        item,
+        area: {
+          id: a.id,
+          name: a.name,
+          description: a.description,
+        },
+        // 物品在区域图上的位置上下文
+        areaImage: (a.images ?? []).find((img) => img.id === item.areaImageId) ?? null,
+        updatedAt: row.updatedAt,
+      });
+    }
+  }
+  res.status(404).json({ ok: false, error: "item not found" });
+});
+
+// 物品位置索引：物品 + 所属区域 + 区域图位置（用于"东西放哪了"类查询）
+app.get("/api/query/locations", (req, res) => {
+  const row = getHomeRow();
+  if (!row) return res.json({ ok: false, error: "no data" });
+  const { area, category } = req.query;
+  const locations = [];
+  for (const a of row.home.areas ?? []) {
+    if (area && a.id !== area) continue;
+    for (const it of a.items ?? []) {
+      if (category && it.category !== category) continue;
+      locations.push({
+        itemId: it.id,
+        name: it.name,
+        category: it.category,
+        brand: it.brand,
+        areaId: a.id,
+        areaName: a.name,
+        areaImageId: it.areaImageId ?? null,
+        areaImagePos: it.areaImagePos ?? null,
+        // 如果物品本身是储物单元，附带其内部物品清单
+        contents: it.contents ?? [],
+      });
+    }
+  }
+  res.json({ ok: true, count: locations.length, locations, updatedAt: row.updatedAt });
+});
+
 /* ============ 静态前端 ============ */
 
 if (fs.existsSync(DIST_DIR)) {
