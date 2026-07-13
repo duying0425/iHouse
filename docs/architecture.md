@@ -48,8 +48,8 @@
 - 单文件 `server/index.js`，约 85 行，零冗余
 
 ### 部署
-- **Docker 多阶段构建**：build 阶段 git clone + pnpm build + npm install；runtime 阶段仅 dist/ + server/
-- **Synology Container Manager**：`nas-deploy/` 目录自包含，只导入 compose YAML，Dockerfile 内 `git clone` 拉代码
+- **Docker 多阶段构建**：build 阶段 COPY 本地源码 + pnpm build + npm install；runtime 阶段仅 dist/ + server/
+- **Docker Compose**：`Dockerfile` 与 `docker-compose.yml` 位于仓库根目录，`git clone` 后 `docker compose up -d --build` 即可；更新时 `git pull` → `docker compose build`
 
 ## 3. 关键设计
 
@@ -162,9 +162,8 @@ iHouse/
 │   ├── PRD.md
 │   ├── architecture.md
 │   └── changelog.md
-├── nas-deploy/                   # NAS 部署（自包含）
-│   ├── Dockerfile                # 多阶段构建（git clone → build → 运行）
-│   └── docker-compose.yml        # Container Manager 导入用
+├── Dockerfile                    # 多阶段构建（COPY 本地源码 → build → 运行）
+├── docker-compose.yml            # Docker Compose 部署配置
 ├── README.md
 ├── package.json / pnpm-lock.yaml
 ├── tsconfig.json / vite.config.ts
@@ -195,17 +194,15 @@ node server/index.js           # :3000，同时提供 API + 静态前端
 
 ### 5.3 Docker / NAS
 
-部署文件集中在 `nas-deploy/` 目录，自包含（不依赖本地源码，Dockerfile 内 `git clone` 拉取最新代码）。
+`Dockerfile` 与 `docker-compose.yml` 位于仓库根目录，使用本地源码构建（不在容器内 `git clone`，构建上下文即仓库根本身）。
 
 ```dockerfile
-# nas-deploy/Dockerfile — 多阶段：build 阶段 clone + 构建，runtime 阶段仅运行时
+# Dockerfile — 多阶段：build 阶段 COPY 源码 + 构建，runtime 阶段仅运行时
 FROM node:20-alpine AS build
-RUN apk add --no-cache git python3 make g++
-RUN corepack enable
-ARG GIT_REPO=https://github.com/duying0425/iHouse.git
-ARG GIT_BRANCH=main
-RUN git clone --depth=1 --branch ${GIT_BRANCH} "${GIT_REPO}" /repo
+RUN apk add --no-cache python3 make g++
+RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 WORKDIR /repo
+COPY . .
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 WORKDIR /repo/server
@@ -225,11 +222,11 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 CMD ["node", "server/index.js"]
 ```
 
-**NAS 部署要点**：
-- Synology Container Manager 只支持导入 compose YAML，不能执行命令
-- 因此 Dockerfile 内 `git clone` 拉代码，compose 文件只需 `build: { context: . }`
-- 数据卷挂载 `./data:/app/server/data`，重建容器不丢数据
-- 更新：代码推到 GitHub 后，在 Container Manager 对项目停止 → 构建 → 启动
+**部署 / 更新要点**：
+- 部署：`git clone` 本仓库 → `docker compose up -d --build`
+- 更新：`git pull` → `docker compose build` → `docker compose up -d`（源码变更会自动触发重建，无需 `--no-cache`）
+- 数据卷挂载 `./server/data:/app/server/data`，重建容器不丢数据；该目录已在 `.gitignore` / `.dockerignore` 中
+- 固定 `pnpm@10.18.2`：pnpm 11+ 需要 Node 22，而镜像为 `node:20-alpine`
 
 ## 6. 数据迁移与备份
 

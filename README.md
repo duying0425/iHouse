@@ -104,12 +104,27 @@ node server/index.js       # 启动服务（同时提供前端静态文件 + API
 
 ## Docker / NAS 部署
 
-项目提供独立的 `nas-deploy/` 部署目录，适配 Synology Container Manager（只支持导入 compose YAML、不能执行命令的场景）。
+`Dockerfile` 和 `docker-compose.yml` 位于仓库根目录，使用本地源码构建（不在容器内 git clone）。
 
-**NAS 上准备一个目录**（如 `/docker/ihouse/`），将仓库 `nas-deploy/` 文件夹内的 `Dockerfile` 和 `docker-compose.yml` 上传到该目录，然后在 Container Manager 导入 compose 文件即可。Dockerfile 会自动 `git clone` 仓库并构建。
+**部署流程**（NAS / 任意装了 Docker 的服务器）：
+
+```bash
+git clone https://github.com/duying0425/iHouse.git
+cd iHouse
+docker compose up -d --build          # 首次构建约 3-5 分钟
+# 访问 http://<NAS_IP>:8180
+```
+
+**更新流程**（手动拉取最新代码后重建）：
+
+```bash
+git pull && docker compose build && docker compose up -d
+```
+
+数据持久化在 `./server/data`（已在 `.gitignore` / `.dockerignore` 中，`git pull` 不会影响数据）。
 
 ```yaml
-# nas-deploy/docker-compose.yml
+# docker-compose.yml
 services:
   ihouse:
     build:
@@ -121,7 +136,7 @@ services:
     ports:
       - "8180:3000"
     volumes:
-      - ./data:/app/server/data
+      - ./server/data:/app/server/data
     environment:
       - TZ=Asia/Shanghai
     healthcheck:
@@ -133,8 +148,8 @@ services:
 ```
 
 - 访问：`http://<NAS_IP>:8180`
-- 数据持久化：`./data` 目录（SQLite 数据库 + 图片文件），重建容器不丢失
-- 更新：代码推到 GitHub 后，在 Container Manager 对项目停止 → 构建 → 启动
+- 数据持久化：`./server/data` 目录（SQLite 数据库 + 图片文件），重建容器不丢失
+- 更新：`git pull` 拉最新代码后 `docker compose build && docker compose up -d`
 
 ### 将现有数据导入 NAS
 
@@ -146,12 +161,12 @@ services:
 
 1. **打包本地数据**：将项目 `server/data/` 目录打包为 `data.zip`
    - 内含 `home.db`（SQLite 数据库）和 `images/` 文件夹（所有图片文件）
-2. **上传到 NAS**：用 Synology File Station 将 `data.zip` 上传到项目目录（如 `/docker/ihouse/`）
-3. **解压**：File Station 中右键 `data.zip` → 解压 → 解压到 `data/` 文件夹
-   - 确认目录结构为 `/docker/ihouse/data/home.db` 和 `/docker/ihouse/data/images/`
-4. **启动容器**：在 Container Manager 中启动项目，容器会自动读取 `data/` 中的数据
+2. **上传到 NAS**：用 Synology File Station 将 `data.zip` 上传到仓库根目录（如 `/volume1/docker/ihouse/`）
+3. **解压**：解压到 `server/data/` 目录
+   - 确认目录结构为 `/volume1/docker/ihouse/server/data/home.db` 和 `/volume1/docker/ihouse/server/data/images/`
+4. **启动容器**：`docker compose up -d --build`，容器会自动读取 `server/data/` 中的数据
 
-> 如果容器已在运行，需先 **停止** → 替换 `data/` 目录内容 → 再 **启动**。
+> 如果容器已在运行，需先 `docker compose down` → 替换 `server/data/` 目录内容 → 再 `docker compose up -d`。
 
 ## 数据存储说明
 
@@ -186,7 +201,8 @@ services:
 │   ├── utils.js          # 后端工具函数（含单元测试）
 │   └── package.json
 ├── docs/                 # 文档（PRD / 架构 / 迭代记录）
-├── nas-deploy/           # NAS 部署（Dockerfile + docker-compose.yml，自包含 git clone 构建）
+├── Dockerfile            # Docker 多阶段构建（本地源码构建）
+├── docker-compose.yml    # Docker Compose 部署配置
 ├── vitest.config.ts      # 单元测试配置
 └── vite.config.ts        # 含 /api 代理配置
 ```

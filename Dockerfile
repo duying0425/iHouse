@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
 
-# 居所图鉴 (iHouse) NAS 部署镜像
-# 使用本地源码构建（构建上下文 = 仓库根目录，由 docker-compose.yml 指定）。
-# 部署流程：在 NAS 上 git clone 本仓库 → 进入 nas-deploy/ → docker compose up -d --build
-# 更新流程：git pull 拉最新代码 → docker compose build → docker compose up -d
+# 居所图鉴 (iHouse) Docker 部署镜像
+# 使用本地源码构建（构建上下文 = 仓库根目录）。
+# 部署：git clone 本仓库 → docker compose up -d --build
+# 更新：git pull → docker compose build → docker compose up -d
 
 # ===== 构建阶段 =====
 FROM node:20-alpine AS build
