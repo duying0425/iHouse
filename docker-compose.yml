@@ -16,9 +16,17 @@
 #   该目录已在 .gitignore / .dockerignore 中，git pull 不会影响数据。
 # 如需备份，复制整个 server/data/ 目录即可。
 #
-# 导入已有数据：将本地 server/data/ 目录打包（含 home.db + images/），
-#   解压到仓库根目录的 server/data/ 下，再启动容器即可。
+# 旧版升级（从单用户系统升级到多用户系统）：
+#   直接 git pull && docker compose build && docker compose up -d 即可。
+#   服务器首次启动时会自动检测旧版 home 表数据，并迁移到新创建的 admin 账户下。
+#   默认账号：admin，默认密码会打印到 docker 容器启动日志：
+#     docker compose logs ihouse | grep -A 8 "自动迁移"
+#   ⚠️ 首次登录后请立即在「设置」中修改密码。
+#
+# 跨设备导入已有数据：将旧机的 server/data/ 目录打包（含 home.db + images/），
+#   解压到新机的 server/data/ 下，再启动容器即可触发自动迁移。
 #   ⚠️ 需 home.db 和 images/ 一并拷贝，仅导入 JSON 会丢失图片。
+#   也可登录后在「设置」页用「导入 zip」按钮手动导入 zip 备份（含 home.json + images/）。
 
 services:
   ihouse:

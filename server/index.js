@@ -137,6 +137,75 @@ function migrateBase64ToFiles() {
 
 migrateBase64ToFiles();
 
+/**
+ * 旧版数据自动迁移到多用户系统。
+ * 触发条件：home 表有数据 + users 表为空 + houses 表为空。
+ * 行为：创建默认 admin 账户 + 默认房屋，把 home.data 搬到 houses.data。
+ * 用于 Docker 镜像升级场景，避免用户手动备份再导入。
+ */
+function migrateOldHomeToMultiUser() {
+  const homeRow = db.prepare("SELECT data FROM home WHERE id = 1").get();
+  if (!homeRow || !homeRow.data) return; // 没有旧数据，无需迁移
+
+  const userCount = db.prepare("SELECT COUNT(*) AS c FROM users").get().c;
+  if (userCount > 0) return; // 已有用户，跳过（不重复迁移）
+
+  const houseCount = db.prepare("SELECT COUNT(*) AS c FROM houses").get().c;
+  if (houseCount > 0) return; // 已有房屋，跳过
+
+  // 从旧数据中提取房屋名（title 字段）
+  let houseName = "我的家";
+  try {
+    const oldState = JSON.parse(homeRow.data);
+    if (oldState && typeof oldState.title === "string" && oldState.title.trim()) {
+      houseName = oldState.title.trim().slice(0, 100);
+    }
+  } catch {
+    /* ignore parse error, use default name */
+  }
+
+  // 生成 12 位默认密码（避免硬编码弱密码）
+  const defaultPassword = crypto.randomBytes(6).toString("hex");
+  const passwordHash = hashPassword(defaultPassword);
+  const houseId = generateHouseId();
+  const shareCode = generateShareCode();
+  const now = new Date().toISOString();
+
+  const migrate = db.transaction(() => {
+    const info = db
+      .prepare(
+        "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)"
+      )
+      .run("admin", passwordHash, "管理员");
+    const userId = info.lastInsertRowid;
+
+    db.prepare(
+      `INSERT INTO houses (id, name, share_code, data, updated_at, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(houseId, houseName, shareCode, homeRow.data, now, userId, now);
+
+    db.prepare(
+      `INSERT INTO house_members (house_id, user_id, role, status, joined_at, created_at)
+       VALUES (?, ?, 'admin', 'approved', ?, ?)`
+    ).run(houseId, userId, now, now);
+  });
+  migrate();
+
+  console.log("");
+  console.log("==========================================================");
+  console.log("  ✓ 旧版数据已自动迁移到多用户系统");
+  console.log("==========================================================");
+  console.log(`  默认管理员账号:  admin`);
+  console.log(`  默认密码:         ${defaultPassword}`);
+  console.log(`  房屋名:           ${houseName}`);
+  console.log(`  分享码:           ${shareCode}`);
+  console.log("  ⚠ 请登录后立即在「设置」中修改密码！");
+  console.log("==========================================================");
+  console.log("");
+}
+
+migrateOldHomeToMultiUser();
+
 const app = express();
 // base64 图片可能较大，放宽 body 限制
 app.use(express.json({ limit: "256mb" }));
