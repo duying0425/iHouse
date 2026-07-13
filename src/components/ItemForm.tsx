@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock } from "lucide-react";
+import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock, Camera } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
 import { CATEGORIES, type AnchorPosition, type Category, type Item, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
@@ -79,7 +79,9 @@ interface ItemFormProps {
 export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
   const { areas } = useHomeStore();
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const galleryCameraRef = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
@@ -200,12 +202,27 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
               className="hidden"
               onChange={(e) => handleFile(e.target.files?.[0])}
             />
+            <input
+              ref={cameraRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => handleFile(e.target.files?.[0])}
+            />
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
               className="btn-secondary"
             >
               <ImagePlus size={15} /> 上传图片
+            </button>
+            <button
+              type="button"
+              onClick={() => cameraRef.current?.click()}
+              className="btn-secondary"
+            >
+              <Camera size={15} /> 拍照
             </button>
             <button
               type="button"
@@ -323,13 +340,41 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
               if (e.target) e.target.value = "";
             }}
           />
-          <button
-            type="button"
-            onClick={() => galleryInputRef.current?.click()}
-            className="mt-3 w-full rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
-          >
-            <Plus size={12} className="mr-1 inline" /> 上传附属图片 (可多选)
-          </button>
+          <input
+            ref={galleryCameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              try {
+                const base64Url = await compressImage(file, 1200, 0.82);
+                const finalUrl = await uploadImage(base64Url);
+                set("gallery", [...value.gallery, finalUrl]);
+              } catch {
+                /* 忽略单张失败 */
+              }
+              if (e.target) e.target.value = "";
+            }}
+          />
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => galleryInputRef.current?.click()}
+              className="flex-1 rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
+            >
+              <Plus size={12} className="mr-1 inline" /> 上传附属图片 (可多选)
+            </button>
+            <button
+              type="button"
+              onClick={() => galleryCameraRef.current?.click()}
+              className="flex-1 rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
+            >
+              <Camera size={12} className="mr-1 inline" /> 拍照添加
+            </button>
+          </div>
         </div>
       </div>
 
