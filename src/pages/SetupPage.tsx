@@ -7,6 +7,7 @@ import {
   GripVertical,
   ImageUp,
   Images,
+  Loader2,
   Plus,
   RotateCcw,
   Save,
@@ -20,6 +21,7 @@ import PageLayout from "@/components/PageLayout";
 import FloorPlan, { BUILTIN_FLOORPLAN } from "@/components/FloorPlan";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
+import { useAuthStore, authFetch } from "@/authStore";
 import { CATEGORIES } from "@/types";
 import { compressImage } from "@/utils/compressImage";
 import { uploadImage } from "@/utils/upload";
@@ -41,8 +43,6 @@ export default function SetupPage() {
     removeAreaImage,
     startBlank,
     resetDemo,
-    exportData,
-    importData,
   } = useHomeStore();
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -52,32 +52,63 @@ export default function SetupPage() {
   const [editName, setEditName] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importHint, setImportHint] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const currentHouseId = useAuthStore((s) => s.currentHouseId);
+  const reloadCurrentHouse = useHomeStore((s) => s.reloadCurrentHouse);
 
-  const handleExport = () => {
-    const json = exportData();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const ts = new Date().toISOString().slice(0, 10);
-    a.href = url;
-    a.download = `iHouse-backup-${ts}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // 从后端下载当前房屋的 zip 备份
+  const handleExport = async () => {
+    if (!currentHouseId || busy) return;
+    setBusy(true);
+    setImportHint(null);
+    try {
+      const res = await authFetch(`/api/houses/${currentHouseId}/backup`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || "导出失败");
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") || "";
+      const m = disposition.match(/filename\*=UTF-8''([^;]+)/);
+      const fname = m ? decodeURIComponent(m[1]) : `ihouse-${currentHouseId}-${new Date().toISOString().slice(0, 10)}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fname;
+      a.click();
+      URL.revokeObjectURL(url);
+      setImportHint("已导出 zip 备份");
+    } catch (e) {
+      setImportHint("导出失败：" + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setImportHint(null), 3000);
+    }
   };
 
-  const handleImportFile = (file?: File) => {
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        importData(String(reader.result));
-        setImportHint("导入成功");
-      } catch (e) {
-        setImportHint("导入失败：" + (e instanceof Error ? e.message : "JSON 格式有误"));
-      }
-      window.setTimeout(() => setImportHint(null), 3000);
-    };
-    reader.readAsText(file);
+  // 上传 zip 到后端，导入到当前房屋
+  const handleImportFile = async (file?: File) => {
+    if (!file || !currentHouseId) return;
+    setBusy(true);
+    setImportHint(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await authFetch(`/api/houses/${currentHouseId}/backup/import`, {
+        method: "POST",
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "导入失败");
+      // 重新拉取房屋数据
+      await reloadCurrentHouse();
+      setImportHint(`导入成功${data.imageCount ? `（${data.imageCount} 张图片）` : ""}`);
+    } catch (e) {
+      setImportHint("导入失败：" + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setBusy(false);
+      window.setTimeout(() => setImportHint(null), 4000);
+    }
   };
 
   const isImageMode = !!floorPlanImage && floorPlanImage !== BUILTIN_FLOORPLAN;
@@ -415,23 +446,28 @@ export default function SetupPage() {
               数据维护
             </h3>
             <p className="mt-1.5 text-2xs text-ink/55">
-              导出当前全部数据为 JSON 备份文件（含户型图、区域、物品、图片），可换设备/浏览器导入恢复。
+              导出当前房屋的完整 zip 备份（含户型图、区域、物品元数据 + 所有图片物理文件），换设备/浏览器时可导入恢复，也可作为日常冷备份。
             </p>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={handleExport} className="btn-secondary">
-                <Download size={14} /> 导出备份
+              <button
+                onClick={handleExport}
+                disabled={busy || !currentHouseId}
+                className="btn-secondary disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} 导出 zip
               </button>
               <button
                 onClick={() => importRef.current?.click()}
-                className="btn-secondary"
+                disabled={busy || !currentHouseId}
+                className="btn-secondary disabled:opacity-50"
               >
-                <UploadCloud size={14} /> 导入备份
+                {busy ? <Loader2 size={14} className="animate-spin" /> : <UploadCloud size={14} />} 导入 zip
               </button>
             </div>
             <input
               ref={importRef}
               type="file"
-              accept="application/json,.json"
+              accept="application/zip,.zip"
               className="hidden"
               onChange={(e) => {
                 handleImportFile(e.target.files?.[0]);
@@ -441,6 +477,9 @@ export default function SetupPage() {
             {importHint && (
               <p className="mt-2 text-2xs text-moss">{importHint}</p>
             )}
+            <p className="mt-2 text-2xs text-ink/40">
+              导入会覆盖当前房屋的全部数据；仅管理员可导入。
+            </p>
           </div>
 
           {/* 自动保存提示 + 返回 */}

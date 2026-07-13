@@ -23,6 +23,9 @@ interface HomeState extends Home {
   // 数据是否已从服务器/本地缓存加载完成（用于门控首屏，避免示例数据闪现）
   _hasHydrated: boolean;
 
+  /** 重新拉取当前房屋数据（用于切换房屋后重置 store） */
+  reloadCurrentHouse: () => Promise<void>;
+
   // 读取
   getArea: (areaId: string) => Area | undefined;
   getItem: (areaId: string, itemId: string) =>
@@ -68,6 +71,13 @@ export const useHomeStore = create<HomeState>()(
     (set, get) => ({
       ...cloneSeed(),
       _hasHydrated: false,
+
+      reloadCurrentHouse: async () => {
+        // 切换房屋时：先重置为空状态，标记为未水合，再触发 persist 重新拉取
+        set({ ...cloneSeed(), _hasHydrated: false });
+        // 让 persist 中间件重新走一遍 getItem 流程
+        await useHomeStore.persist.rehydrate();
+      },
 
       getArea: (areaId) => get().areas.find((a) => a.id === areaId),
 

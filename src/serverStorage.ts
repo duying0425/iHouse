@@ -1,15 +1,39 @@
 import type { StateStorage } from "zustand/middleware";
+import { useAuthStore } from "@/authStore";
 
 /**
- * 服务器优先的持久化存储：
- * - getItem: 先向服务器拉取最新数据；服务器不可用时回退到本地 IndexedDB 缓存
- * - setItem: 立即写入本地 IndexedDB 缓存 + 防抖同步到服务器
+ * 服务器优先的持久化存储（多房屋 + 鉴权版本）。
+ *
+ * - getItem: 先向服务器拉取当前房屋最新数据；服务器不可用时回退到本地 IndexedDB 缓存
+ * - setItem: 立即写入本地缓存 + 防抖同步到服务器
  *
  * 服务器是数据源头（多设备共享），IndexedDB 仅作本地缓存与离线兜底。
- * 单用户场景，采用 last-write-wins，不做冲突合并。
+ * 同一房屋内采用 last-write-wins，不做冲突合并。
+ *
+ * 切换房屋：通过 setHouseContext(newId) 改变后续 getItem/setItem 的目标房屋，
+ * 然后 store.persist.rehydrate() 重新拉取数据。
  */
 
-/* ===== 本地 IndexedDB 缓存（离线兜底） ===== */
+/* ===== 当前房屋上下文 ===== */
+let currentHouseId: string | null = null;
+
+export function setHouseContext(houseId: string | null) {
+  currentHouseId = houseId;
+}
+
+export function getCurrentHouseId() {
+  return currentHouseId;
+}
+
+/** 带 token 的 fetch；token 缺失时仍发请求（让后端 401 拦截） */
+function authedFetch(input: RequestInfo, init: RequestInit = {}) {
+  const token = useAuthStore.getState().token;
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return fetch(input, { ...init, headers });
+}
+
+/* ===== 本地 IndexedDB 缓存（按房屋隔离） ===== */
 const idbCache = {
   _db: null as IDBDatabase | null,
   _ready: null as Promise<IDBDatabase> | null,
@@ -73,6 +97,11 @@ const idbCache = {
   },
 };
 
+/** 当前房屋的本地缓存 key */
+function cacheKey(name: string): string {
+  return currentHouseId ? `${name}-${currentHouseId}` : name;
+}
+
 /* ===== 防抖同步到服务器 ===== */
 const SYNC_DEBOUNCE = 600;
 let syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -89,27 +118,28 @@ function scheduleSync(value: string) {
 
 async function flushSync() {
   if (pendingValue == null) return;
+  if (!currentHouseId) return;
   const value = pendingValue;
   try {
     const parsed = JSON.parse(value);
-    const res = await fetch("/api/home", {
+    const res = await authedFetch(`/api/houses/${currentHouseId}/data`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.state),
     });
+    if (res.status === 401) {
+      // 会话失效，触发重新登录
+      const auth = useAuthStore.getState();
+      if (auth.token) {
+        await auth.logout();
+      }
+      return;
+    }
     if (res.ok) {
       const data = await res.json();
-      if (data && data.data) {
-        const nextStateJson = JSON.stringify(data.data);
-        const currentStateJson = JSON.stringify(parsed.state);
-        if (nextStateJson !== currentStateJson) {
-          const name = "home-atlas";
-          const wrapped = JSON.stringify({ state: data.data, version: 2 });
-          await idbCache.setItem(name, wrapped);
-          
-          const { useHomeStore } = await import("@/store");
-          useHomeStore.setState(data.data);
-        }
+      if (data && data.ok) {
+        // 同步成功；后端可能清洗了 base64 → 物理文件 URL，
+        // 但我们采用 last-write-wins，不主动拉取覆盖本地状态。
       }
     }
   } catch (e) {
@@ -121,10 +151,10 @@ async function flushSync() {
 // 页面隐藏时尽力同步最后一次变更
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden" && pendingValue) {
+    if (document.visibilityState === "hidden" && pendingValue && currentHouseId) {
       try {
         const parsed = JSON.parse(pendingValue);
-        void fetch("/api/home", {
+        void authedFetch(`/api/houses/${currentHouseId}/data`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parsed.state),
@@ -140,30 +170,42 @@ if (typeof document !== "undefined") {
 /* ===== 对外暴露的 StateStorage ===== */
 export const serverStorage: StateStorage = {
   async getItem(name) {
+    if (!currentHouseId) {
+      // 未选择房屋：返回 null，让 store 用 seed/demo 数据
+      return null;
+    }
     // 服务器优先
     try {
-      const res = await fetch("/api/home");
+      const res = await authedFetch(`/api/houses/${currentHouseId}/data`);
+      if (res.status === 401) {
+        // 会话失效：让 authStore 处理
+        return null;
+      }
       if (res.ok) {
         const state = await res.json();
         if (state && state.areas !== undefined) {
           const wrapped = JSON.stringify({ state, version: 2 });
           // 刷新本地缓存
-          idbCache.setItem(name, wrapped);
+          idbCache.setItem(cacheKey(name), wrapped);
           return wrapped;
         }
+        // 房屋无数据：返回 null（store 会保留 seed 状态）
+        return null;
       }
     } catch {
       // 服务器不可用，走本地缓存
     }
-    return idbCache.getItem(name);
+    return idbCache.getItem(cacheKey(name));
   },
   async setItem(name, value) {
+    if (!currentHouseId) return;
     // 立即写本地缓存
-    idbCache.setItem(name, value);
+    idbCache.setItem(cacheKey(name), value);
     // 防抖同步到服务器
     scheduleSync(value);
   },
   async removeItem(name) {
-    idbCache.removeItem(name);
+    if (!currentHouseId) return;
+    idbCache.removeItem(cacheKey(name));
   },
 };

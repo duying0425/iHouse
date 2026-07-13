@@ -5,6 +5,7 @@ import PageLayout from "@/components/PageLayout";
 import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/ItemForm";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
+import { useAuthStore } from "@/authStore";
 import { imageOf } from "@/utils/image";
 
 export default function ItemFormPage() {
@@ -35,6 +36,14 @@ export default function ItemFormPage() {
   const handleSave = () => {
     if (saving) return;
     if (!value.name.trim()) return;
+    // 演示模式下不允许实际保存，跳到登录页
+    if (!useAuthStore.getState().user) {
+      navigate("/login", {
+        replace: true,
+        state: { from: `/area/${areaId}/item/new` },
+      });
+      return;
+    }
     setSaving(true);
     try {
       const created = addItem(areaId, {

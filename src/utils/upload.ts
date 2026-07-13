@@ -4,7 +4,11 @@
  * - 成功：返回后端返回的图片 URL（如 /api/images/xxx.jpg）
  * - 失败（如离线状态）：回退并直接返回原 base64 数据，作为离线兜底暂存在客户端
  * 如果已经是 URL，则直接返回。
+ *
+ * 上传请求会附带当前登录用户的 Authorization 头。
  */
+import { authFetch } from "@/authStore";
+
 export async function uploadImage(base64OrUrl: string): Promise<string> {
   if (!base64OrUrl) return "";
   if (!base64OrUrl.startsWith("data:image/")) {
@@ -12,7 +16,7 @@ export async function uploadImage(base64OrUrl: string): Promise<string> {
   }
 
   try {
-    const res = await fetch("/api/upload", {
+    const res = await authFetch("/api/upload", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
