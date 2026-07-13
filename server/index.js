@@ -443,6 +443,29 @@ app.post("/api/auth/logout", requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// 修改密码
+app.post("/api/auth/change-password", requireAuth, (req, res) => {
+  const { currentPassword, newPassword } = req.body || {};
+  if (!currentPassword || !newPassword) {
+    return res.status(400).json({ ok: false, error: "请输入当前密码和新密码" });
+  }
+  if (!isValidPassword(newPassword)) {
+    return res.status(400).json({ ok: false, error: "新密码长度需 6-128 位" });
+  }
+  const row = db
+    .prepare("SELECT password_hash FROM users WHERE id = ?")
+    .get(req.user.id);
+  if (!row || !verifyPassword(currentPassword, row.password_hash)) {
+    return res.status(400).json({ ok: false, error: "当前密码错误" });
+  }
+  const newHash = hashPassword(newPassword);
+  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+    newHash,
+    req.user.id
+  );
+  res.json({ ok: true });
+});
+
 app.get("/api/me", requireAuth, (req, res) => {
   const houses = db
     .prepare(

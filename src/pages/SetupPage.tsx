@@ -495,9 +495,106 @@ export default function SetupPage() {
               <ArrowLeft size={15} /> 返回首页
             </Link>
           </div>
+
+          {/* 账户安全：修改密码 */}
+          <AccountSecurityCard />
         </aside>
       </div>
     </PageLayout>
+  );
+}
+
+/** 账户安全：修改密码 */
+function AccountSecurityCard() {
+  const { user } = useAuthStore();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const submit = async () => {
+    setMsg(null);
+    if (!current || !next || !confirm) {
+      setMsg({ type: "err", text: "请填写所有字段" });
+      return;
+    }
+    if (next !== confirm) {
+      setMsg({ type: "err", text: "两次输入的新密码不一致" });
+      return;
+    }
+    if (next.length < 6 || next.length > 128) {
+      setMsg({ type: "err", text: "新密码长度需 6-128 位" });
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await authFetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword: current, newPassword: next }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.error || "修改失败");
+      setMsg({ type: "ok", text: "密码已更新" });
+      setCurrent("");
+      setNext("");
+      setConfirm("");
+    } catch (e) {
+      setMsg({ type: "err", text: e instanceof Error ? e.message : "修改失败" });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card p-4">
+      <div className="mb-3 flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
+        <Settings2 size={14} /> 账户安全
+      </div>
+      <p className="mb-3 text-2xs text-ink/45">
+        当前账号：<span className="text-ink/70">{user?.username}</span>
+      </p>
+      <div className="space-y-2">
+        <input
+          type="password"
+          placeholder="当前密码"
+          value={current}
+          onChange={(e) => setCurrent(e.target.value)}
+          className="input"
+          autoComplete="current-password"
+        />
+        <input
+          type="password"
+          placeholder="新密码（6-128 位）"
+          value={next}
+          onChange={(e) => setNext(e.target.value)}
+          className="input"
+          autoComplete="new-password"
+        />
+        <input
+          type="password"
+          placeholder="确认新密码"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          className="input"
+          autoComplete="new-password"
+        />
+        {msg && (
+          <p className={cn("text-2xs", msg.type === "ok" ? "text-moss" : "text-clay-600")}>
+            {msg.text}
+          </p>
+        )}
+        <button
+          onClick={submit}
+          disabled={busy}
+          className="btn-primary w-full disabled:opacity-50"
+        >
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+          修改密码
+        </button>
+      </div>
+    </div>
   );
 }
 
