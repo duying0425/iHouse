@@ -93,6 +93,13 @@ export default function ItemDetailPage() {
 
   const color = CATEGORY_COLOR[found.category];
 
+  // 储物空间内的物品按名称排序
+  const sortedContents = found.contents
+    ? [...found.contents].sort((a, b) =>
+        a.name.localeCompare(b.name, "zh-CN")
+      )
+    : [];
+
   // 维护状态计算
   const maintenance = found.maintenanceCycle
     ? getMaintenanceStatus(found)
@@ -295,7 +302,7 @@ export default function ItemDetailPage() {
             )}
 
             {/* 内部物品清单（储物单元） */}
-            {found.contents && found.contents.length > 0 && (
+            {sortedContents.length > 0 && (
               <div className="mt-6 card overflow-hidden">
                 <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
                   <Box size={14} className="text-ochre" />
@@ -303,11 +310,11 @@ export default function ItemDetailPage() {
                     内部物品清单
                   </h3>
                   <span className="ml-auto text-2xs text-ink/45">
-                    共 {found.contents.length} 项
+                    共 {sortedContents.length} 项
                   </span>
                 </div>
                 <ul className="divide-y divide-line">
-                  {found.contents.map((c) => (
+                  {sortedContents.map((c) => (
                     <li
                       key={c.id}
                       className="flex items-baseline gap-3 px-4 py-2.5"

@@ -32,14 +32,16 @@ export default function AreaDetailPage() {
   const filteredItems = useMemo(() => {
     if (!area) return [];
     const k = kw.trim().toLowerCase();
-    if (!k) return area.items;
-    return area.items.filter((i) =>
-      [i.name, i.brand, i.spec, i.remark, i.category]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(k)
-    );
+    const list = k
+      ? area.items.filter((i) =>
+          [i.name, i.brand, i.spec, i.remark, i.category]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(k)
+        )
+      : area.items;
+    return [...list].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
   }, [area, kw]);
 
   if (!area) {
