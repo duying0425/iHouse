@@ -12,10 +12,12 @@ RUN apk add --no-cache git python3 make g++
 # 固定 pnpm 版本：pnpm 11+ 需要 Node 22，本镜像为 Node 20
 RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 
+# CACHEBUST：更新代码时在 docker-compose.yml 中改这个值即可打破缓存重新拉取源码
+ARG CACHEBUST=1
 # clone 仓库（浅克隆，可通过 build-arg 切换分支）
 ARG GIT_REPO=https://github.com/duying0425/iHouse.git
 ARG GIT_BRANCH=main
-RUN git clone --depth=1 --branch ${GIT_BRANCH} "${GIT_REPO}" /repo
+RUN echo "cache bust: $CACHEBUST" && git clone --depth=1 --branch ${GIT_BRANCH} "${GIT_REPO}" /repo
 
 # 构建前端
 WORKDIR /repo

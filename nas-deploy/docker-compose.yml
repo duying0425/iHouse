@@ -7,8 +7,11 @@
 # 3. 首次构建需要 3-5 分钟（git clone + pnpm build + better-sqlite3 编译）
 # 4. 访问 http://<NAS_IP>:8180
 #
-# 更新方法：Container Manager → 选中项目 → 停止 → 构建 → 启动
-#   （会重新 git clone 最新代码并构建）
+# 更新方法：
+#   1. 先把下方 CACHEBUST 的值改成任意新值（如日期 20260713-1），保存
+#   2. Container Manager → 选中项目 → 停止 → 构建 → 启动
+#   改 CACHEBUST 是为了打破 Docker 缓存，强制重新 git clone 最新代码
+#   （否则缓存命中会复用旧代码层，不会重新拉取）
 #
 # 数据持久化：SQLite 数据库 + 图片文件存放在 ./data 目录，重建容器不丢失。
 # 如需备份，复制整个 data/ 目录即可。
@@ -22,6 +25,9 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        # 更新代码时改这个值（任意字符串，如日期）即可强制重新拉取源码
+        CACHEBUST: "v1"
     image: ihouse:latest
     container_name: ihouse
     restart: unless-stopped
