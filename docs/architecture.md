@@ -1,6 +1,6 @@
 # iHouse · 居所图鉴 — 技术架构文档
 
-> 版本：v3 · 最后更新：2026-07-13
+> 版本：v3 · 最后更新：2026-07-14
 
 ## 1. 总体架构
 
@@ -33,7 +33,10 @@
 │  ├─ 静态文件服务（dist/，SPA fallback）             │
 │              ↕                                       │
 │  SQLite（better-sqlite3，WAL 模式）                 │
-│  └─ home 表：单行（id=1）存全量 JSON                │
+│  ├─ users          用户（username/password_hash/...）│
+│  ├─ sessions       登录会话（token/user_id/expires） │
+│  ├─ houses         房屋（id/name/shareCode/state JSON）│
+│  └─ house_members  成员关系（user_id/house_id/role/status）│
 └─────────────────────────────────────────────────────┘
               ↕ 挂载 volume
 ┌─────────────────────────────────────────────────────┐
@@ -55,8 +58,9 @@
 ### 后端
 - **Node.js 20 + Express**：HTTP 服务
 - **better-sqlite3**：同步 SQLite 驱动，WAL 模式提升并发
-- `server/index.js` 路由层（约 150 行）
-- `server/utils.js`：Base64 提取工具（含单元测试）
+- `server/index.js` 路由层
+- `server/auth.js`：鉴权模块（scrypt 密码哈希、token 生成与校验、分享码、用户名/密码格式校验、`createAuthMiddleware` 中间件工厂）
+- `server/utils.js`：Base64 提取、`collectImageRefs` 图片引用收集工具（含单元测试）
 - `server/query.js`：结构化查询纯函数模块（含单元测试），未来 AI 工具可直接复用
 
 ### 部署
@@ -163,6 +167,40 @@ zustand + persist 中间件，关键点：
 /export          → 导出 PDF
 ```
 
+### 3.8 测试体系
+
+测试框架为 **Vitest 4.x**，分三层覆盖：
+
+**第一层：前端纯函数单元测试**
+- `src/utils/compressImage.ts` / `upload.ts` / `maintenance.ts`（24 用例）/ `homeData.ts`（3 用例，残缺数据规范化）
+- `src/serverStorage.test.ts` 跨房屋缓存隔离
+- `src/components/export/exportModel.test.ts` 导出页模型与小册子拼版
+- `src/lib/cn.test.ts` 类名合并
+
+**第二层：后端纯函数单元测试**
+- `server/utils.test.js`（12 用例）：Base64 提取 + `collectImageRefs` 图片引用收集
+- `server/query.test.js`（34 用例）：结构化查询纯函数，覆盖空 home 容错、组合过滤、储物单元搜索、Top 10 截断、404 路径
+- `server/auth.test.js`（30 用例）：密码 scrypt 哈希/校验、token 生成与过期、分享码（去混淆字符集）、houseId、用户名/密码格式校验、`createAuthMiddleware` 中间件 6 种分支（无头/格式错/token 不存在/过期删除/有效/大小写）
+
+**第三层：端到端 API 集成测试**（`server/api.test.js`，59 用例）
+- 用 `mkdtempSync` 创建临时数据目录 + 随机端口启动真实 server 子进程
+- `beforeAll` 轮询 `/api/health` 等待就绪，`afterAll` SIGTERM 清理 + 删除临时目录
+- 覆盖完整业务流：注册 → 登录 → 建房 → 写数据 → 查询 → 加入审批 → 备份往返 → 修改密码 → 登出
+- 权限隔离：非成员读他人房屋 403、非 admin 不能导入备份 403、不能移除最后一个 admin 400、重复申请 409
+- 备份往返一致性：导出 zip → FormData 上传回导入接口 → 读取数据验证完全一致
+- 设 `DEBUG_SERVER=1` 环境变量可查看 server 子进程日志便于排查
+
+**运行方式**：
+
+```bash
+pnpm test                                    # 全部测试
+pnpm test server/auth.test.js                # 仅鉴权单元测试
+pnpm test server/api.test.js                 # 仅 API 集成测试
+$env:DEBUG_SERVER=1; pnpm test server/api.test.js   # 带 server 日志
+```
+
+**当前规模**：11 个测试文件，180 个用例，约 2-3 秒完成。
+
 ## 4. 项目结构
 
 ```
@@ -185,6 +223,7 @@ iHouse/
 │   │   ├── compressImage.ts      # 图片压缩
 │   │   ├── upload.ts             # 图片上传到服务器
 │   │   ├── maintenance.ts        # 维护状态计算（5 档）
+│   │   ├── homeData.ts           # 房屋数据规范化（补齐残缺字段防白屏）
 │   │   └── *.test.ts             # 单元测试
 │   ├── store.ts                  # zustand store（persist + serverStorage）
 │   ├── serverStorage.ts          # 服务器优先 + IndexedDB 缓存适配器
@@ -194,10 +233,13 @@ iHouse/
 │   └── index.css                 # Tailwind + @media print
 ├── server/
 │   ├── index.js                  # Express + better-sqlite3，路由层
-│   ├── utils.js                  # Base64 提取工具（含测试）
+│   ├── auth.js                   # 鉴权模块（密码哈希 / token / 分享码 / 中间件）
+│   ├── utils.js                  # Base64 提取、图片引用收集工具
 │   ├── query.js                  # 结构化查询纯函数（summary/areas/items/locations）
-│   ├── utils.test.js             # utils.js 测试
-│   ├── query.test.js             # query.js 测试（34 个用例）
+│   ├── utils.test.js             # utils.js 测试（12 用例）
+│   ├── query.test.js             # query.js 测试（34 用例）
+│   ├── auth.test.js              # auth.js 测试（30 用例）
+│   ├── api.test.js               # 端到端 API 集成测试（59 用例）
 │   ├── package.json
 │   └── data/                     # SQLite 数据库 + 图片文件（.gitignore）
 ├── docs/                         # 文档

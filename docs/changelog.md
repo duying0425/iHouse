@@ -2,6 +2,19 @@
 
 > 按时间倒序，最近在上。
 
+## 2026-07-14 · test: 鉴权与端到端 API 集成测试 + 文档同步
+
+**背景**：上一轮完成多用户账号系统、多房屋隔离、备份导入导出后，关键安全模块 `server/auth.js` 与完整 API 路由层缺乏自动化测试覆盖，回归风险高。本次系统性补齐测试并刷新全部文档。
+**变更**：
+- 新增 `server/auth.test.js`（30 用例）：覆盖 `hashPassword`/`verifyPassword`（正确/错误/非法格式/中文符号）、`generateToken`/`tokenExpiry`、`generateShareCode`（去混淆字符集 I/O/0/1）、`generateHouseId`、`isValidUsername`/`isValidPassword`、`createAuthMiddleware` 中间件 6 种分支（无 Authorization 头 / 非 Bearer 格式 / token 不存在 / token 过期触发删除 / 有效 token 设置 `req.user`/`req.token` / Bearer 大小写不敏感）
+- 新增 `server/api.test.js`（59 用例）：端到端 HTTP 集成测试，用 `mkdtempSync` 创建临时数据目录 + 随机端口启动真实 server 子进程，`beforeAll` 轮询 `/api/health` 等待就绪、`afterAll` SIGTERM 清理。覆盖健康检查、注册/登录/登出、修改密码（旧密码失效/新密码可用）、房屋 CRUD、查询 API（summary/areas/items/locations + 组合过滤 + 404/400 边界）、成员管理（分享码查询/申请加入/重复申请 409/审批/审批后可访问/退出/最后管理员保护）、备份导出导入往返（zip 导出 → FormData 上传回导入 → 数据一致性校验 / 非 zip 拒绝 400）、权限隔离（非成员读他人房屋 403 / 非 admin 不能导入 403 / 旧版 `/api/home` 已停用 410）
+- 扩展 `server/utils.test.js`（5 → 12 用例）：新增 `collectImageRefs` 7 个测试（嵌套对象数组遍历、去重、外部 URL 与 base64 过滤、null/undefined/原始类型容错、多扩展名保留）
+- 整合既有未提交改动：`src/utils/homeData.ts`（房屋数据规范化，补齐残缺 area/item 字段防白屏）+ `homeData.test.ts`（3 用例）+ `src/serverStorage.ts` 接入 `normalizeHomeData`
+- 文档同步：README 测试段落 81 → 180、项目结构补 auth.js/auth.test.js/api.test.js/homeData.ts；PRD 第 6 节移除"不做多用户账号系统"（已实现）；architecture 新增 3.8 测试体系章节（三层测试架构）、架构图 SQLite 改为多表（users/sessions/houses/house_members）、后端模块表补 auth.js；changelog 补本次记录
+**效果**：测试总数 81 → 180（+99），关键安全模块与完整 API 路由层实现自动化回归保护；`pnpm lint` 0 error 0 warning。
+
+---
+
 ## 2026-07-14 · feat(export): 自适应无图布局与小册子导出
 
 **变更**：

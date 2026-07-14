@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { extractBase64Images } from "./utils.js";
+import { extractBase64Images, collectImageRefs } from "./utils.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const TEST_IMAGES_DIR = path.join(__dirname, "temp-test-images");
@@ -116,5 +116,92 @@ describe("extractBase64Images", () => {
     // Should not crash and not modify the invalid data
     expect(result).toBe(false);
     expect(input).toEqual(originalInput);
+  });
+});
+
+describe("collectImageRefs", () => {
+  it("收集形如 /api/images/xxx.ext 的引用", () => {
+    const home = {
+      floorPlanImage: "/api/images/floor.png",
+      areas: [
+        {
+          images: [{ url: "/api/images/living.jpg" }],
+          items: [{ image: "/api/images/sofa.png" }],
+        },
+      ],
+    };
+    const refs = collectImageRefs(home);
+    expect(refs).toBeInstanceOf(Set);
+    expect(Array.from(refs).sort()).toEqual(
+      ["floor.png", "living.jpg", "sofa.png"].sort()
+    );
+  });
+
+  it("嵌套对象和数组都能遍历", () => {
+    const home = {
+      areas: [
+        {
+          images: [
+            { url: "/api/images/a.png" },
+            { url: "/api/images/b.png" },
+          ],
+          items: [
+            {
+              image: "/api/images/c.png",
+              gallery: ["/api/images/g1.jpg", "/api/images/g2.jpg"],
+              contents: [{ remark: "/api/images/nested.png" }],
+            },
+          ],
+        },
+      ],
+    };
+    const refs = Array.from(collectImageRefs(home)).sort();
+    expect(refs).toEqual(
+      ["a.png", "b.png", "c.png", "g1.jpg", "g2.jpg", "nested.png"].sort()
+    );
+  });
+
+  it("去重相同的引用", () => {
+    const home = {
+      areas: [
+        { items: [{ image: "/api/images/dup.png" }] },
+        { items: [{ image: "/api/images/dup.png" }] },
+      ],
+      floorPlanImage: "/api/images/dup.png",
+    };
+    expect(collectImageRefs(home)).toEqual(new Set(["dup.png"]));
+  });
+
+  it("不收集外部 URL 与 base64 数据", () => {
+    const home = {
+      floorPlanImage: "https://example.com/foo.png",
+      externalUrl: "http://img.com/x.jpg",
+      base64: "data:image/png;base64,abc",
+      areas: [
+        { items: [{ image: "/api/images/real.png" }] },
+      ],
+    };
+    expect(collectImageRefs(home)).toEqual(new Set(["real.png"]));
+  });
+
+  it("对 null / undefined / 原始类型不抛错", () => {
+    expect(collectImageRefs(null)).toEqual(new Set());
+    expect(collectImageRefs(undefined)).toEqual(new Set());
+    expect(collectImageRefs("string")).toEqual(new Set());
+    expect(collectImageRefs(123)).toEqual(new Set());
+    expect(collectImageRefs([])).toEqual(new Set());
+  });
+
+  it("空对象返回空集合", () => {
+    expect(collectImageRefs({})).toEqual(new Set());
+    expect(collectImageRefs({ areas: [] })).toEqual(new Set());
+    expect(collectImageRefs({ areas: [{ items: [] }] })).toEqual(new Set());
+  });
+
+  it("保留文件名中的点与多扩展名", () => {
+    const home = {
+      areas: [{ items: [{ image: "/api/images/photo.tar.gz" }] }],
+    };
+    expect(collectImageRefs(home)).toEqual(new Set(["photo.tar.gz"]));
   });
 });
