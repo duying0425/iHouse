@@ -81,6 +81,9 @@ export const useHomeStore = create<HomeState>()(
           await useHomeStore.persist.rehydrate();
         } finally {
           setReloading(false);
+          // 显式标记水合完成，不依赖 onRehydrateStorage 回调
+          // （该回调在某些时序下可能不触发，导致页面永久卡在 loading）
+          set({ _hasHydrated: true });
         }
       },
 
