@@ -14,10 +14,11 @@ import {
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
-import ItemForm, { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/ItemForm";
+import ItemForm from "@/components/ItemForm";
+import { itemToFormValue, normalizeContents, type ItemFormValue } from "@/components/itemFormValue";
 import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
-import { CATEGORY_COLOR } from "@/types";
+import { CATEGORY_COLOR, type AreaImage, type Item } from "@/types";
 import SafeImage from "@/components/SafeImage";
 import {
   getMaintenanceStatus,
@@ -92,6 +93,12 @@ export default function ItemDetailPage() {
   };
 
   const color = CATEGORY_COLOR[found.category];
+  const locationImage =
+    area.images.find((image) => image.id === found.areaImageId) ?? area.images[0];
+  const hasLocationVisual = Boolean(found.areaImagePos && locationImage);
+  const hasGallery = Boolean(found.gallery?.length);
+  const hasMediaColumn = Boolean(found.image || hasGallery || hasLocationVisual);
+  const promoteLocation = !found.image && hasLocationVisual;
 
   // 储物空间内的物品按名称排序
   const sortedContents = found.contents
@@ -144,28 +151,27 @@ export default function ItemDetailPage() {
           </div>
         </>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8">
+        <div className={hasMediaColumn ? "grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8" : "mx-auto max-w-4xl"}>
           {/* 左：照片与相册 */}
-          <div className="space-y-4">
-            <div className="card overflow-hidden">
-              <div className="relative bg-clay-50">
-                <SafeImage
-                  category={found.category}
-                  src={found.image}
-                  alt={found.name}
-                  className="block h-auto w-full object-contain cursor-zoom-in"
-                  fallbackClassName="aspect-[4/3] w-full"
-                  onClick={() => setPreviewImage(found.image)}
-                />
-                <span className="absolute left-3 top-3 chip bg-cream/90 backdrop-blur-sm">
-                  <span
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: color }}
+          {hasMediaColumn && <div className="space-y-4">
+            {found.image && (
+              <div className="card overflow-hidden">
+                <div className="relative aspect-[4/3] bg-clay-50">
+                  <SafeImage
+                    category={found.category}
+                    src={found.image}
+                    alt={found.name}
+                    className="h-full w-full cursor-zoom-in object-contain"
+                    fallbackClassName="absolute inset-0"
+                    onClick={() => setPreviewImage(found.image ?? null)}
                   />
-                  {found.category}
-                </span>
+                  <span className="absolute left-3 top-3 chip bg-cream/90 backdrop-blur-sm">
+                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+                    {found.category}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             {found.gallery && found.gallery.length > 0 && (
               <div className="card p-4">
@@ -189,7 +195,10 @@ export default function ItemDetailPage() {
                 </div>
               </div>
             )}
-          </div>
+            {promoteLocation && (
+              <LocationCard item={found} image={locationImage} onEdit={() => setEditing(true)} />
+            )}
+          </div>}
 
           {/* 右：信息 */}
           <div className="flex flex-col">
@@ -342,52 +351,9 @@ export default function ItemDetailPage() {
             )}
 
             {/* 区域图定位 */}
-            <div className="mt-6 card overflow-hidden">
-              <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
-                <MapPin size={14} className="text-ochre" />
-                <h3 className="font-serif text-sm font-semibold text-ink">
-                  在区域图中的位置
-                </h3>
-                <span className="ml-auto text-2xs text-ink/45">
-                  {found.areaImagePos ? "已标注" : "未标注"}
-                </span>
-              </div>
-              {(() => {
-                const img =
-                  area.images.find((i) => i.id === found.areaImageId) ??
-                  area.images[0];
-                if (found.areaImagePos && img) {
-                  return (
-                    <div className="p-4">
-                      <AreaImageCanvas
-                        image={img}
-                        items={[
-                          { ...found, areaImagePos: found.areaImagePos! },
-                        ]}
-                        activeItemId={found.id}
-                        compact
-                      />
-                      {img.label && (
-                        <p className="mt-2 text-2xs text-ink/45">
-                          标注于：{img.label}
-                        </p>
-                      )}
-                    </div>
-                  );
-                }
-                return (
-                  <div className="p-6 text-center text-sm text-ink/45">
-                    该物品尚未在区域图上标注位置，
-                    <button
-                      onClick={() => setEditing(true)}
-                      className="text-clay-500 underline-offset-2 hover:underline"
-                    >
-                      去编辑标注
-                    </button>
-                  </div>
-                );
-              })()}
-            </div>
+            {!promoteLocation && (
+              <LocationCard item={found} image={locationImage} onEdit={() => setEditing(true)} />
+            )}
           </div>
         </div>
       )}
@@ -414,6 +380,35 @@ export default function ItemDetailPage() {
         </div>
       )}
     </PageLayout>
+  );
+}
+
+function LocationCard({ item, image, onEdit }: { item: Item; image?: AreaImage; onEdit: () => void }) {
+  const hasPosition = Boolean(item.areaImagePos && image);
+  return (
+    <div className="mt-6 card overflow-hidden first:mt-0">
+      <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
+        <MapPin size={14} className="text-ochre" />
+        <h3 className="font-serif text-sm font-semibold text-ink">在区域图中的位置</h3>
+        <span className="ml-auto text-2xs text-ink/45">{hasPosition ? "已标注" : "未标注"}</span>
+      </div>
+      {hasPosition ? (
+        <div className="p-4">
+          <AreaImageCanvas
+            image={image}
+            items={[{ ...item, areaImagePos: item.areaImagePos! }]}
+            activeItemId={item.id}
+            compact
+          />
+          {image?.label && <p className="mt-2 text-2xs text-ink/45">标注于：{image.label}</p>}
+        </div>
+      ) : (
+        <div className="p-4 text-center text-xs text-ink/45">
+          尚未标注位置，
+          <button onClick={onEdit} className="text-clay-500 underline-offset-2 hover:underline">去编辑标注</button>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -41,13 +41,12 @@ describe("uploadImage utility", () => {
     const base64Input = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
     const result = await uploadImage(base64Input);
 
-    expect(mockFetch).toHaveBeenCalledWith("/api/upload", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ image: base64Input }),
-    });
+    expect(mockFetch).toHaveBeenCalledOnce();
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe("/api/upload");
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
+    expect(init.body).toBe(JSON.stringify({ image: base64Input }));
     expect(result).toBe("/api/images/uploaded_hash.png");
   });
 

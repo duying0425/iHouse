@@ -84,7 +84,7 @@ export default function AreaDetailPage() {
       </nav>
 
       {/* 区域图片 + 物品标记 */}
-      <section className="grid gap-6 lg:grid-cols-[1.6fr_1fr]">
+      <section className={cn("grid gap-6", images.length > 0 && "lg:grid-cols-[1.6fr_1fr]")}>
         <div className="card overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
             <h3 className="flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
@@ -102,14 +102,18 @@ export default function AreaDetailPage() {
           </div>
 
           {images.length === 0 ? (
-            <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 bg-clay-50 text-ink/40">
-              <Layers size={28} />
-              <span className="text-2xs">
-                该区域暂无图片，请到「户型设置」上传
-              </span>
-              <Link to="/setup" className="btn-secondary mt-1">
-                去设置
-              </Link>
+            <div className="flex flex-col gap-4 bg-clay-50/70 px-4 py-4 sm:flex-row sm:items-center">
+              <div className="flex min-w-0 flex-1 items-center gap-3 text-ink/50">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-cream"><Layers size={20} /></span>
+                <div>
+                  <p className="text-sm font-medium text-ink/70">该区域暂无图片</p>
+                  <p className="text-2xs">物品清单仍可正常使用，需要时再补充区域图。</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 sm:border-l sm:border-line sm:pl-4">
+                <div><p className="font-display text-xl text-clay-600">{area.items.length}</p><p className="text-[10px] text-ink/40">件物品</p></div>
+                <Link to="/setup" className="btn-secondary">添加图片</Link>
+              </div>
             </div>
           ) : (
             <>
@@ -148,7 +152,7 @@ export default function AreaDetailPage() {
         </div>
 
         {/* 缩略图列表 */}
-        <div className="flex flex-col gap-4">
+        {images.length > 0 && <div className="flex flex-col gap-4">
           {images.length > 0 && (
             <div className="card overflow-hidden">
               <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
@@ -200,11 +204,11 @@ export default function AreaDetailPage() {
               点击下方物品卡片可在左侧区域图上高亮其位置；点击图上的标记可跳转物品详情。
             </p>
           </div>
-        </div>
+        </div>}
       </section>
 
       {/* 物品列表 */}
-      <section className="mt-10">
+      <section className={images.length > 0 ? "mt-10" : "mt-6"}>
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div>
             <span className="font-display text-2xs uppercase tracking-[0.2em] text-clay-500">

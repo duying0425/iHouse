@@ -102,10 +102,11 @@ zustand + persist 中间件，关键点：
 
 **原理**：
 1. `createPortal` 把所有页面挂到 `document.body` 下的 `#print-export-root`
-2. 每页 A4 原尺寸（210mm × 297mm），`PageFrame` 传 `print` prop 跳过缩放 transform
-3. 500ms 后调用 `window.print()`
-4. `@media print` CSS：`body * { visibility: hidden }`，仅 `#print-export-root` 可见，每页 `page-break-after: always`
-5. `afterprint` 事件清理 DOM
+2. `exportModel.ts` 先生成与 UI 解耦的逻辑页：详细档案为 A4，紧凑模式为 A5
+3. 小册子逻辑页补齐四的倍数，按「末页+首页 / 第 2 页+倒数第 2 页」规则拼成 A4 横向正反面
+4. 等待 `document.fonts.ready`、全部图片 `load/error/decode` 和两个布局帧后调用 `window.print()`
+5. 导出器按所选模式注入明确的 `@page` A4 横向/纵向规则；`@media print` 仅显示打印容器并强制逐面分页
+6. `afterprint` 或窗口重新聚焦后清理 DOM
 
 **优点**：文字矢量、图片原生渲染、秒级完成
 **缺点**：版式依赖浏览器打印引擎，不同浏览器略有差异
@@ -127,24 +128,25 @@ zustand + persist 中间件，关键点：
 
 **模块**：`server/query.js`（纯函数）+ `server/index.js` 路由层
 
-**背景**：基础 API `/api/home` 返回整个 JSON blob，对人类前端够用，但 AI 工具调用需要精简、可过滤的语义端点。新增 `/api/query/*` 一组接口作为未来智能化的数据访问层。
+**背景**：房屋数据 API `/api/houses/:id/data` 返回整个 JSON blob，对人类前端够用，但 AI 工具调用需要精简、可过滤的语义端点。新增 `/api/query/*` 一组接口作为未来智能化的数据访问层。
 
 **设计要点**：
 - **纯函数 + 路由层分离**：核心查询逻辑（`buildSummary` / `listAreas` / `getAreaById` / `searchItems` / `getItemById` / `listLocations`）抽到 `server/query.js` 作为纯函数，不依赖数据库与 HTTP，路由层只负责读取 DB、调用纯函数、附带 `updatedAt`。便于单元测试，也便于未来 AI Agent 直接 `import` 复用。
 - **统一返回格式**：`{ ok, ..., updatedAt }`，调用方可判断数据新鲜度
 - **物品搜索**：关键词匹配覆盖 名称 / 品牌 / 规格 / 备注 / 使用说明 / 储物单元内部清单（contents），全小写子串匹配
 - **位置索引**：`/api/query/locations` 专为"东西放哪了"类查询设计，精简字段（itemId / name / areaName / areaImagePos / contents）
+- **访问隔离**：所有端点要求 Bearer Token，并通过必填的 `houseId`（查询参数或 `x-house-id` 请求头）校验房屋成员权限
 
 **端点清单**：
 
 | 端点 | 参数 | 用途 |
 |---|---|---|
-| `GET /api/query/summary` | - | 全屋概览（区域数/物品数/分类分布/Top 品牌/需维护数） |
-| `GET /api/query/areas` | `?withItems=1` | 区域列表（默认精简，不含物品） |
-| `GET /api/query/areas/:areaId` | - | 区域详情 |
-| `GET /api/query/items` | `?area=&category=&brand=&q=` | 物品搜索（组合过滤） |
-| `GET /api/query/items/:itemId` | - | 物品详情 + 所属区域 + 区域图位置 |
-| `GET /api/query/locations` | `?area=&category=` | 物品位置索引 |
+| `GET /api/query/summary` | `?houseId=` | 全屋概览（区域数/物品数/分类分布/Top 品牌/需维护数） |
+| `GET /api/query/areas` | `?houseId=&withItems=1` | 区域列表（默认精简，不含物品） |
+| `GET /api/query/areas/:areaId` | `?houseId=` | 区域详情 |
+| `GET /api/query/items` | `?houseId=&area=&category=&brand=&q=` | 物品搜索（组合过滤） |
+| `GET /api/query/items/:itemId` | `?houseId=` | 物品详情 + 所属区域 + 区域图位置 |
+| `GET /api/query/locations` | `?houseId=&area=&category=` | 物品位置索引 |
 
 **测试**：`server/query.test.js` 34 个用例，覆盖空 home 容错、分类/品牌/关键词组合过滤、储物单元 contents 搜索、Top 10 截断、404 路径、字段完整性等。
 

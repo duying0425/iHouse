@@ -126,10 +126,14 @@ body {
   display: none;
 }
 
-/* @page 必须在顶层，不能嵌套在 @media print 内
-   否则部分浏览器会忽略它，导致默认边距生效、内容填不满 A4 */
-@page {
-  size: A4;
+/* 两种导出布局使用命名页面，避免预览尺寸与实际打印尺寸不一致。 */
+@page archive {
+  size: A4 portrait;
+  margin: 0;
+}
+
+@page booklet {
+  size: A4 landscape;
   margin: 0;
 }
 
@@ -154,12 +158,10 @@ body {
     margin: 0;
     padding: 0;
   }
-  /* 每页 A4 一页，强制分页。
-     用 100vw/100vh 撑满整个打印纸张，避免 mm 在不同 DPI 下换算偏差
-     导致页面小于物理纸张、留出白边 */
-  .print-page {
-    width: 100vw;
-    height: 100vh;
+  .print-page-archive {
+    page: archive;
+    width: 210mm;
+    height: 297mm;
     box-sizing: border-box;
     page-break-after: always;
     break-after: page;
@@ -167,9 +169,35 @@ body {
     -webkit-print-color-adjust: exact;
     print-color-adjust: exact;
   }
-  .print-page:last-child {
+  .print-page-archive:last-child {
     page-break-after: auto;
     break-after: auto;
+  }
+  .print-sheet-booklet {
+    page: booklet;
+    display: grid;
+    grid-template-columns: 148.5mm 148.5mm;
+    width: 297mm;
+    height: 210mm;
+    box-sizing: border-box;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .print-sheet-booklet:last-child {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .booklet-panel {
+    width: 148.5mm;
+    height: 210mm;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .booklet-panel-right {
+    border-left: 0.2mm solid rgba(74, 63, 54, 0.16);
   }
   html, body {
     background: #fff !important;
@@ -177,12 +205,4 @@ body {
     padding: 0 !important;
     width: 100%;
   }
-  /* 放大打印文字，提升可读性（仅打印生效，不影响屏幕预览） */
-  #print-export-root .text-\[8px\] { font-size: 10px; }
-  #print-export-root .text-\[9px\] { font-size: 11px; }
-  #print-export-root .text-\[10px\] { font-size: 12px; }
-  #print-export-root .text-\[11px\] { font-size: 13px; }
-  #print-export-root .text-2xs { font-size: 12px; }
-  #print-export-root .text-xs { font-size: 13px; }
-  #print-export-root .text-sm { font-size: 15px; }
 }

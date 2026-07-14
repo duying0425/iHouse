@@ -12,6 +12,8 @@ import type {
 import { cloneSeed, collectBrands, genId } from "@/data/seed";
 import { serverStorage, setReloading } from "@/serverStorage";
 
+let reloadGeneration = 0;
+
 /**
  * 持久化存储：服务器优先 + 本地 IndexedDB 缓存。
  * 服务器是多设备共享的数据源头；本地缓存用于离线兜底。
@@ -73,6 +75,7 @@ export const useHomeStore = create<HomeState>()(
       _hasHydrated: false,
 
       reloadCurrentHouse: async () => {
+        const generation = ++reloadGeneration;
         // 切换房屋时：先重置为空状态，标记为未水合，再触发 persist 重新拉取
         // 用 isReloading 标志防止 set 触发 setItem 把 seed 同步到服务器
         setReloading(true);
@@ -80,10 +83,13 @@ export const useHomeStore = create<HomeState>()(
         try {
           await useHomeStore.persist.rehydrate();
         } finally {
-          setReloading(false);
-          // 显式标记水合完成，不依赖 onRehydrateStorage 回调
-          // （该回调在某些时序下可能不触发，导致页面永久卡在 loading）
-          set({ _hasHydrated: true });
+          // 仅最后一次切换可以结束 loading；较早请求晚返回时不得覆盖新房屋状态。
+          if (generation === reloadGeneration) {
+            setReloading(false);
+            // 显式标记水合完成，不依赖 onRehydrateStorage 回调
+            // （该回调在某些时序下可能不触发，导致页面永久卡在 loading）
+            set({ _hasHydrated: true });
+          }
         }
       },
 

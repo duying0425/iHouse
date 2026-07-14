@@ -103,32 +103,33 @@ const idbCache = {
   },
 };
 
-/** 当前房屋的本地缓存 key */
-function cacheKey(name: string): string {
-  return currentHouseId ? `${name}-${currentHouseId}` : name;
+/** 指定房屋的本地缓存 key */
+function cacheKey(name: string, houseId = currentHouseId): string {
+  return houseId ? `${name}-${houseId}` : name;
 }
 
-/* ===== 防抖同步到服务器 ===== */
+/* ===== 按房屋隔离的防抖同步 ===== */
 const SYNC_DEBOUNCE = 600;
-let syncTimer: ReturnType<typeof setTimeout> | null = null;
-let pendingValue: string | null = null;
+const syncTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingValues = new Map<string, string>();
 
-function scheduleSync(value: string) {
-  pendingValue = value;
-  if (syncTimer) clearTimeout(syncTimer);
-  syncTimer = setTimeout(() => {
-    syncTimer = null;
-    void flushSync();
+function scheduleSync(houseId: string, value: string) {
+  pendingValues.set(houseId, value);
+  const existing = syncTimers.get(houseId);
+  if (existing) clearTimeout(existing);
+  const timer = setTimeout(() => {
+    syncTimers.delete(houseId);
+    void flushSync(houseId);
   }, SYNC_DEBOUNCE);
+  syncTimers.set(houseId, timer);
 }
 
-async function flushSync() {
-  if (pendingValue == null) return;
-  if (!currentHouseId) return;
-  const value = pendingValue;
+async function flushSync(houseId: string) {
+  const value = pendingValues.get(houseId);
+  if (value == null) return;
   try {
     const parsed = JSON.parse(value);
-    const res = await authedFetch(`/api/houses/${currentHouseId}/data`, {
+    const res = await authedFetch(`/api/houses/${houseId}/data`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(parsed.state),
@@ -139,13 +140,16 @@ async function flushSync() {
       if (auth.token) {
         await auth.logout();
       }
+      pendingValues.clear();
       return;
     }
     if (res.ok) {
       const data = await res.json();
       if (data && data.ok) {
-        // 同步成功；后端可能清洗了 base64 → 物理文件 URL，
-        // 但我们采用 last-write-wins，不主动拉取覆盖本地状态。
+        // 仅清除本次成功写入的版本；请求期间若又产生了新版本则继续保留。
+        if (pendingValues.get(houseId) === value) {
+          pendingValues.delete(houseId);
+        }
       }
     }
   } catch (e) {
@@ -157,17 +161,19 @@ async function flushSync() {
 // 页面隐藏时尽力同步最后一次变更
 if (typeof document !== "undefined") {
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden" && pendingValue && currentHouseId) {
-      try {
-        const parsed = JSON.parse(pendingValue);
-        void authedFetch(`/api/houses/${currentHouseId}/data`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(parsed.state),
-          keepalive: true,
-        });
-      } catch {
-        // ignore
+    if (document.visibilityState === "hidden") {
+      for (const [houseId, value] of pendingValues) {
+        try {
+          const parsed = JSON.parse(value);
+          void authedFetch(`/api/houses/${houseId}/data`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(parsed.state),
+            keepalive: true,
+          });
+        } catch {
+          // ignore
+        }
       }
     }
   });
@@ -176,13 +182,14 @@ if (typeof document !== "undefined") {
 /* ===== 对外暴露的 StateStorage ===== */
 export const serverStorage: StateStorage = {
   async getItem(name) {
-    if (!currentHouseId) {
+    const houseId = currentHouseId;
+    if (!houseId) {
       // 未选择房屋：返回 null，让 store 用 seed/demo 数据
       return null;
     }
     // 服务器优先
     try {
-      const res = await authedFetch(`/api/houses/${currentHouseId}/data`);
+      const res = await authedFetch(`/api/houses/${houseId}/data`);
       if (res.status === 401) {
         // 会话失效：让 authStore 处理
         return null;
@@ -199,7 +206,8 @@ export const serverStorage: StateStorage = {
           );
           const wrapped = JSON.stringify({ state, version: isV1 ? 1 : 2 });
           // 刷新本地缓存
-          idbCache.setItem(cacheKey(name), wrapped);
+          idbCache.setItem(cacheKey(name, houseId), wrapped);
+          if (currentHouseId !== houseId) return null;
           return wrapped;
         }
         // 房屋无数据：返回 null（store 会保留 seed 状态）
@@ -208,16 +216,19 @@ export const serverStorage: StateStorage = {
     } catch {
       // 服务器不可用，走本地缓存
     }
-    return idbCache.getItem(cacheKey(name));
+    if (currentHouseId !== houseId) return null;
+    const cached = await idbCache.getItem(cacheKey(name, houseId));
+    return currentHouseId === houseId ? cached : null;
   },
   async setItem(name, value) {
-    if (!currentHouseId) return;
+    const houseId = currentHouseId;
+    if (!houseId) return;
     // reload 期间不写缓存也不同步（防止 seed 覆盖真实数据）
     if (isReloading) return;
     // 立即写本地缓存
-    idbCache.setItem(cacheKey(name), value);
-    // 防抖同步到服务器
-    scheduleSync(value);
+    idbCache.setItem(cacheKey(name, houseId), value);
+    // 防抖同步到服务器；房屋 ID 与内容一起捕获，避免切换房屋后串写。
+    scheduleSync(houseId, value);
   },
   async removeItem(name) {
     if (!currentHouseId) return;

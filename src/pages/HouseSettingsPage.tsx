@@ -26,8 +26,7 @@ interface Member {
 export default function HouseSettingsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user, houses } = useAuthStore();
-  const myHouse = houses.find((h) => h.id === id);
+  const { user } = useAuthStore();
 
   const [house, setHouse] = useState<{
     id: string;

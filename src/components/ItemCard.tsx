@@ -21,6 +21,7 @@ export default function ItemCard({
 }: ItemCardProps) {
   const color = CATEGORY_COLOR[item.category];
   const to = `/area/${item.areaId}/item/${item.id}`;
+  const hasImage = Boolean(item.image);
 
   const inner = (
     <article
@@ -35,26 +36,30 @@ export default function ItemCard({
         style={{ background: color }}
         aria-hidden
       />
-      {/* 图片 */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-clay-50">
-        <SafeImage
-          category={item.category}
-          src={item.image}
-          alt={item.name}
-          loading="lazy"
-          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
-          fallbackClassName="absolute inset-0"
-        />
-        <span className="absolute left-2 top-2 chip bg-cream/90 backdrop-blur-sm">
-          <span
-            className="h-1.5 w-1.5 rounded-full"
-            style={{ background: color }}
+      {hasImage && (
+        <div className="relative aspect-[4/3] overflow-hidden bg-clay-50">
+          <SafeImage
+            category={item.category}
+            src={item.image}
+            alt={item.name}
+            loading="lazy"
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            fallbackClassName="absolute inset-0"
           />
-          {item.category}
-        </span>
-      </div>
+          <span className="absolute left-2 top-2 chip bg-cream/90 backdrop-blur-sm">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+            {item.category}
+          </span>
+        </div>
+      )}
       {/* 信息 */}
       <div className="flex flex-1 flex-col gap-1 p-3">
+        {!hasImage && (
+          <span className="mb-1 inline-flex w-fit items-center gap-1 rounded-full bg-clay-50 px-2 py-0.5 text-[10px] text-ink/55">
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: color }} />
+            {item.category}
+          </span>
+        )}
         <h3 className="line-clamp-1 font-serif text-sm font-semibold text-ink">
           {item.name}
         </h3>

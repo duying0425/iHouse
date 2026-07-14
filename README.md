@@ -22,10 +22,10 @@
 - **图片压缩**：上传/粘贴时自动压缩（canvas 缩放 + JPEG），避免存储爆满。
 - **多设备共享**：数据存服务器 SQLite，所有设备访问同一份数据；本地 IndexedDB 作缓存，离线仍可用，联网自动同步。
 - **数据备份**：一键导出 JSON 备份，可跨设备/环境导入恢复。
-- **PDF 导出（原生打印·秒级）**：调用浏览器原生打印，在打印对话框选「另存为 PDF」即可保存；文字矢量、图片直接渲染。按 封面 → 户型图 → 区域 → 物品 的层级生成图鉴，区域页图片标注所有设备位置序号，与物品清单对照。
+- **PDF 导出（小册子 / 详细档案）**：默认把紧凑 A5 阅读页自动拼成 A4 横向双面折页，也可输出 A4 纵向详细档案；长说明、清单和所有图片自动续页。打印前会等待字体与图片完成载入，文字保持矢量清晰。
 - **检索**：按关键词、分类、品牌、区域筛选物品。
 - **结构化查询 API**：提供 `/api/query/*` 端点（summary/areas/items/locations），按区域/分类/品牌/关键词过滤，为未来接入 AI 智能化提供数据访问层。
-- **单元测试**：vitest 覆盖前后端工具函数（图片处理、上传、维护状态计算、cn、Base64 提取、结构化查询），75 个测试全过。
+- **单元测试**：vitest 覆盖前后端工具函数（图片处理、上传、维护状态、导出拼版、跨房屋同步、cn、Base64 提取、结构化查询），81 个测试全过。
 
 ## 技术栈
 
@@ -102,8 +102,8 @@ PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET | `/api/health` | 健康检查 |
-| GET | `/api/home` | 读取全部数据（JSON blob） |
-| PUT | `/api/home` | 整体覆盖写入 |
+| GET | `/api/houses/:id/data` | 读取指定房屋数据（需登录及房屋权限） |
+| PUT | `/api/houses/:id/data` | 整体覆盖指定房屋数据（需登录及房屋权限） |
 | POST | `/api/upload` | 上传单张图片，返回 `/api/images/<hash>.<ext>` URL |
 | GET | `/api/images/<file>` | 访问已上传的图片 |
 
@@ -113,12 +113,12 @@ PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
 
 | 方法 | 路径 | 参数 | 说明 |
 |---|---|---|---|
-| GET | `/api/query/summary` | - | 全屋概览：区域数、物品数、分类分布、Top 品牌、需维护数 |
-| GET | `/api/query/areas` | `?withItems=1` | 区域列表（默认精简，不含物品） |
-| GET | `/api/query/areas/:areaId` | - | 单个区域详情（含物品与区域图） |
-| GET | `/api/query/items` | `?area=&category=&brand=&q=` | 物品列表/搜索，支持组合过滤 |
-| GET | `/api/query/items/:itemId` | - | 物品详情（附带所属区域、区域图位置上下文） |
-| GET | `/api/query/locations` | `?area=&category=` | 物品位置索引（用于"东西放哪了"类查询） |
+| GET | `/api/query/summary` | `?houseId=` | 全屋概览：区域数、物品数、分类分布、Top 品牌、需维护数 |
+| GET | `/api/query/areas` | `?houseId=&withItems=1` | 区域列表（默认精简，不含物品） |
+| GET | `/api/query/areas/:areaId` | `?houseId=` | 单个区域详情（含物品与区域图） |
+| GET | `/api/query/items` | `?houseId=&area=&category=&brand=&q=` | 物品列表/搜索，支持组合过滤 |
+| GET | `/api/query/items/:itemId` | `?houseId=` | 物品详情（附带所属区域、区域图位置上下文） |
+| GET | `/api/query/locations` | `?houseId=&area=&category=` | 物品位置索引（用于"东西放哪了"类查询） |
 
 所有查询端点统一返回 `{ ok, ..., updatedAt }` 结构，便于调用方判断数据新鲜度。物品搜索的关键词匹配覆盖：名称/品牌/规格/备注/使用说明/储物单元内部清单。
 

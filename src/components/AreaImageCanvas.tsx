@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from "react";
-import { ImageOff, MapPin } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImageOff, Loader2, MapPin } from "lucide-react";
 import type { AnchorPosition, AreaImage, Item } from "@/types";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +42,14 @@ export default function AreaImageCanvas({
 }: AreaImageCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [hoverId, setHoverId] = useState<string | undefined>();
+  const [imageState, setImageState] = useState<"loading" | "loaded" | "error">("loading");
+
+  useEffect(() => {
+    setImageState(image?.url ? "loading" : "error");
+    if (!image?.url) return;
+    const timer = window.setTimeout(() => setImageState("error"), 10_000);
+    return () => window.clearTimeout(timer);
+  }, [image?.url]);
 
   const toPct = useCallback((clientX: number, clientY: number) => {
     const el = wrapRef.current;
@@ -84,6 +92,7 @@ export default function AreaImageCanvas({
       onClick={handleClick}
       className={cn(
         "relative w-full overflow-hidden bg-clay-50 select-none",
+        imageState !== "loaded" && "aspect-[4/3]",
         pickable && "cursor-crosshair",
         className
       )}
@@ -91,19 +100,33 @@ export default function AreaImageCanvas({
       <img
         src={image.url}
         alt={image.label || "区域图片"}
-        className="block h-auto w-full pointer-events-none"
+        className={cn("block h-auto w-full pointer-events-none", imageState !== "loaded" && "invisible")}
         draggable={false}
+        onLoad={() => setImageState("loaded")}
+        onError={() => setImageState("error")}
       />
 
+      {imageState === "loading" && (
+        <div className="absolute inset-0 flex items-center justify-center text-clay-400" aria-label="区域图片载入中">
+          <Loader2 size={compact ? 18 : 24} className="animate-spin" />
+        </div>
+      )}
+      {imageState === "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-ink/40">
+          <ImageOff size={compact ? 20 : 28} />
+          {!compact && <span className="text-2xs">区域图片载入失败</span>}
+        </div>
+      )}
+
       {/* 图片标签（左上角） */}
-      {image.label && !compact && (
+      {imageState === "loaded" && image.label && !compact && (
         <span className="absolute left-2 top-2 chip bg-cream/90 backdrop-blur-sm">
           {image.label}
         </span>
       )}
 
       {/* 物品标记 */}
-      {items.map((it) => {
+      {imageState === "loaded" && items.map((it) => {
         if (!it.areaImagePos) return null;
         const isActive = it.id === activeItemId || it.id === hoverId;
         const MARKER_RED = "#E53935";

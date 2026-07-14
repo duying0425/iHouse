@@ -262,42 +262,35 @@ app.post("/api/upload", requireAuth, (req, res) => {
   }
 });
 
-// 读取全部数据
-app.get("/api/home", (_req, res) => {
-  const row = db.prepare("SELECT data FROM home WHERE id = 1").get();
-  if (!row || !row.data) return res.json(null);
-  try {
-    res.json(JSON.parse(row.data));
-  } catch {
-    res.json(null);
-  }
-});
-
-// 保存全部数据（整体覆盖且拦截清洗残留的 base64）
-app.put("/api/home", (req, res) => {
-  const homeData = req.body ?? null;
-  if (homeData) {
-    extractBase64Images(homeData, IMAGES_DIR);
-  }
-  const data = JSON.stringify(homeData);
-  const now = new Date().toISOString();
-  db.prepare(`
-    INSERT INTO home (id, data, updated_at) VALUES (1, ?, ?)
-    ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at
-  `).run(data, now);
-  res.json({ ok: true, data: homeData, updated_at: now });
+// 旧版单房屋接口已停用。旧表仅保留用于迁移和旧备份兼容，禁止通过网络读写。
+app.all("/api/home", (_req, res) => {
+  res.status(410).json({
+    ok: false,
+    error: "旧版 /api/home 已停用，请使用 /api/houses/:id/data",
+  });
 });
 
 /* ============ 结构化查询 API ============ */
 /* 为未来接入 AI 智能化提供精简、可检索的数据访问层。
- * 与 /api/home（返回完整 JSON blob）不同，这里按语义维度切分，
+ * 与房屋数据接口（返回完整 JSON blob）不同，这里按语义维度切分，
  * 支持按区域 / 分类 / 品牌 / 关键词过滤，便于 LLM 工具调用。
  * 核心逻辑抽取到 ./query.js 作为纯函数，便于复用与单元测试。
  */
 
 // 从数据库读取并解析 home 数据；同时返回 updated_at
-function getHomeRow() {
-  const row = db.prepare("SELECT data, updated_at FROM home WHERE id = 1").get();
+function getQueryHouseRow(req, res) {
+  const houseId = String(req.query.houseId || req.headers["x-house-id"] || "").trim();
+  if (!houseId) {
+    res.status(400).json({ ok: false, error: "缺少 houseId" });
+    return null;
+  }
+  if (!canAccessHouse(houseId, req.user.id)) {
+    res.status(403).json({ ok: false, error: "无权访问该房屋" });
+    return null;
+  }
+  const row = db
+    .prepare("SELECT data, updated_at FROM houses WHERE id = ?")
+    .get(houseId);
   if (!row || !row.data) return null;
   try {
     return { home: JSON.parse(row.data), updatedAt: row.updated_at };
@@ -312,23 +305,26 @@ function withUpdatedAt(result, updatedAt) {
 }
 
 // 全屋概览：区域数、物品数、分类分布、Top 品牌、需维护数等
-app.get("/api/query/summary", (_req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/summary", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   res.json(withUpdatedAt(buildSummary(row.home), row.updatedAt));
 });
 
 // 区域列表：默认精简（不含物品），?withItems=1 时附带物品
-app.get("/api/query/areas", (req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/areas", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   const result = listAreas(row.home, { withItems: req.query.withItems === "1" });
   res.json(withUpdatedAt(result, row.updatedAt));
 });
 
 // 单个区域详情：含物品与区域图
-app.get("/api/query/areas/:areaId", (req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/areas/:areaId", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   const result = getAreaById(row.home, req.params.areaId);
   if (!result.ok) return res.status(404).json(result);
@@ -336,8 +332,9 @@ app.get("/api/query/areas/:areaId", (req, res) => {
 });
 
 // 物品列表 / 搜索：支持 ?area=, ?category=, ?brand=, ?q= 组合过滤
-app.get("/api/query/items", (req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/items", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   const result = searchItems(row.home, {
     area: req.query.area,
@@ -349,8 +346,9 @@ app.get("/api/query/items", (req, res) => {
 });
 
 // 单个物品详情：附带所属区域信息
-app.get("/api/query/items/:itemId", (req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/items/:itemId", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   const result = getItemById(row.home, req.params.itemId);
   if (!result.ok) return res.status(404).json(result);
@@ -358,8 +356,9 @@ app.get("/api/query/items/:itemId", (req, res) => {
 });
 
 // 物品位置索引：物品 + 所属区域 + 区域图位置（用于"东西放哪了"类查询）
-app.get("/api/query/locations", (req, res) => {
-  const row = getHomeRow();
+app.get("/api/query/locations", requireAuth, (req, res) => {
+  const row = getQueryHouseRow(req, res);
+  if (res.headersSent) return;
   if (!row) return res.json({ ok: false, error: "no data" });
   const result = listLocations(row.home, {
     area: req.query.area,

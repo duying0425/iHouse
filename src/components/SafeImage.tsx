@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Tv, Sofa, Box, Palette, Wrench, HelpCircle } from "lucide-react";
+import { Tv, Sofa, Box, Palette, Wrench, HelpCircle, Loader2 } from "lucide-react";
 import type { Category } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { cn } from "@/lib/utils";
@@ -16,13 +16,18 @@ export default function SafeImage({
   className,
   fallbackClassName,
   alt = "image",
+  onLoad,
+  onError,
   ...props
 }: SafeImageProps) {
-  const [error, setError] = useState(false);
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">(src ? "loading" : "error");
 
   // 当 src 改变时重置错误状态
   useEffect(() => {
-    setError(false);
+    setStatus(src ? "loading" : "error");
+    if (!src) return;
+    const timer = window.setTimeout(() => setStatus("error"), 10_000);
+    return () => window.clearTimeout(timer);
   }, [src]);
 
   const color = CATEGORY_COLOR[category] || "#6B6258";
@@ -58,17 +63,31 @@ export default function SafeImage({
     );
   };
 
-  if (error || !src) {
+  if (status === "error" || !src) {
     return renderFallback();
   }
 
   return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setError(true)}
-      className={className}
-      {...props}
-    />
+    <>
+      <img
+        src={src}
+        alt={alt}
+        onLoad={(event) => {
+          setStatus("loaded");
+          onLoad?.(event);
+        }}
+        onError={(event) => {
+          setStatus("error");
+          onError?.(event);
+        }}
+        className={cn(className, status === "loading" && "opacity-0")}
+        {...props}
+      />
+      {status === "loading" && (
+        <div className={cn("absolute inset-0 flex items-center justify-center bg-clay-50 text-clay-400", fallbackClassName)} aria-label="图片载入中">
+          <Loader2 size={22} className="animate-spin" />
+        </div>
+      )}
+    </>
   );
 }

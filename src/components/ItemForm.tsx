@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock, Camera } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
-import { CATEGORIES, type AnchorPosition, type Category, type Item, type StorageEntry } from "@/types";
+import { CATEGORIES, type Category, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
 import { compressImage } from "@/utils/compressImage";
 import { uploadImage } from "@/utils/upload";
@@ -9,66 +9,7 @@ import { useHomeStore } from "@/store";
 import { genId } from "@/data/seed";
 import { cn } from "@/lib/utils";
 import { MAINTENANCE_PRESETS, getMaintenanceStatus } from "@/utils/maintenance";
-
-export interface ItemFormValue {
-  name: string;
-  category: Category;
-  brand: string;
-  spec: string;
-  purchaseDate: string;
-  price: string;
-  remark: string;
-  image: string;
-  gallery: string[];
-  /** 物品标注在区域图片上的 id */
-  areaImageId: string | null;
-  /** 物品在区域图片上的位置 */
-  areaImagePos: AnchorPosition | null;
-  /** 储物单元内部物品清单（可选） */
-  contents: StorageEntry[];
-  /** 使用说明（可选） */
-  usage: string;
-  /** 维护周期（天），空字符串表示无 */
-  maintenanceCycle: string;
-  /** 上次维护日期 YYYY-MM-DD */
-  lastMaintenanceDate: string;
-}
-
-export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
-  return {
-    name: item?.name ?? "",
-    category: (item?.category as Category) ?? "家电",
-    brand: item?.brand ?? "",
-    spec: item?.spec ?? "",
-    purchaseDate: item?.purchaseDate ?? "",
-    price: item?.price != null ? String(item.price) : "",
-    remark: item?.remark ?? "",
-    image: item?.image ?? "",
-    gallery: item?.gallery?.map((g) => g) ?? [],
-    areaImageId: item?.areaImageId ?? null,
-    areaImagePos: item?.areaImagePos ?? null,
-    contents: item?.contents?.map((c) => ({ ...c })) ?? [],
-    usage: item?.usage ?? "",
-    maintenanceCycle:
-      item?.maintenanceCycle != null ? String(item.maintenanceCycle) : "",
-    lastMaintenanceDate: item?.lastMaintenanceDate ?? "",
-  };
-}
-
-/** 将表单中的 contents 规整为可存储格式：丢弃空名称行，裁剪空白，省略空字段 */
-export function normalizeContents(
-  contents: StorageEntry[]
-): StorageEntry[] | undefined {
-  const result = contents
-    .map((c) => ({
-      id: c.id,
-      name: c.name.trim(),
-      quantity: c.quantity?.trim() || undefined,
-      remark: c.remark?.trim() || undefined,
-    }))
-    .filter((c) => c.name.length > 0);
-  return result.length > 0 ? result : undefined;
-}
+import type { ItemFormValue } from "@/components/itemFormValue";
 
 interface ItemFormProps {
   value: ItemFormValue;
@@ -267,6 +208,15 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
             >
               <Wand2 size={15} /> 生成示例图
             </button>
+            {value.image && (
+              <button
+                type="button"
+                onClick={() => set("image", "")}
+                className="btn-ghost text-ochre hover:bg-ochre/10"
+              >
+                <Trash2 size={15} /> 移除主图
+              </button>
+            )}
             {pasteHint && (
               <span className="ml-auto text-2xs text-moss">{pasteHint}</span>
             )}
