@@ -34,3 +34,6 @@ node*.exe
 
 # server 目录用 npm，不应有 pnpm-lock
 server/pnpm-lock.yaml
+
+# 临时 QA 脚本与本地调试产物
+tmp/
