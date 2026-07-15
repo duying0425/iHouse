@@ -42,10 +42,15 @@ export default function AreaImageCanvas({
 }: AreaImageCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+  const loadingTimeoutRef = useRef<number | null>(null);
   const [hoverId, setHoverId] = useState<string | undefined>();
   const [imageState, setImageState] = useState<"loading" | "loaded" | "error">("loading");
 
   useEffect(() => {
+    if (loadingTimeoutRef.current !== null) {
+      window.clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
     setImageState(image?.url ? "loading" : "error");
     if (!image?.url) return;
     // 缓存图片可能在 effect 执行前就已完成载入，避免错过 load 事件后误判超时。
@@ -53,7 +58,8 @@ export default function AreaImageCanvas({
       setImageState(imgRef.current.naturalWidth > 0 ? "loaded" : "error");
       return;
     }
-    const timer = window.setTimeout(() => {
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      loadingTimeoutRef.current = null;
       // 超时前再检查一次：图片可能已加载完成但 onLoad 事件被 StrictMode 双挂载吞掉
       const img = imgRef.current;
       if (img?.complete && img.naturalWidth > 0) {
@@ -62,7 +68,12 @@ export default function AreaImageCanvas({
         setImageState("error");
       }
     }, 10_000);
-    return () => window.clearTimeout(timer);
+    return () => {
+      if (loadingTimeoutRef.current !== null) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
   }, [image?.url]);
 
   const toPct = useCallback((clientX: number, clientY: number) => {
@@ -117,8 +128,20 @@ export default function AreaImageCanvas({
         alt={image.label || "区域图片"}
         className={cn("block h-auto w-full pointer-events-none", imageState !== "loaded" && "invisible")}
         draggable={false}
-        onLoad={() => setImageState("loaded")}
-        onError={() => setImageState("error")}
+        onLoad={() => {
+          if (loadingTimeoutRef.current !== null) {
+            window.clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
+          setImageState("loaded");
+        }}
+        onError={() => {
+          if (loadingTimeoutRef.current !== null) {
+            window.clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
+          setImageState("error");
+        }}
       />
 
       {imageState === "loading" && (
