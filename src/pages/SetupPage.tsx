@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
+  Camera,
   ChevronRight,
   Download,
   GripVertical,
@@ -46,6 +47,7 @@ export default function SetupPage() {
   } = useHomeStore();
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const importRef = useRef<HTMLInputElement>(null);
   const [newName, setNewName] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -231,11 +233,25 @@ export default function SetupPage() {
                   className="hidden"
                   onChange={(e) => handleUpload(e.target.files?.[0])}
                 />
+                <input
+                  ref={cameraRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) => handleUpload(e.target.files?.[0])}
+                />
                 <button
                   onClick={() => fileRef.current?.click()}
                   className="btn-primary"
                 >
                   <Upload size={15} /> 上传户型图
+                </button>
+                <button
+                  onClick={() => cameraRef.current?.click()}
+                  className="btn-secondary"
+                >
+                  <Camera size={15} /> 拍照
                 </button>
                 {!isImageMode && (
                   <span className="text-2xs text-ink/45">当前：内置示例图</span>
@@ -611,6 +627,7 @@ function AreaImagesEditor({
   onRemove: (imageId: string) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   // 支持一次选择多个文件，全部压缩完并上传后再按原始顺序添加（避免异步乱序）
   const handleFiles = async (files: FileList | null) => {
@@ -651,6 +668,17 @@ function AreaImagesEditor({
           if (e.target) e.target.value = "";
         }}
       />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          handleFiles(e.target.files);
+          if (e.target) e.target.value = "";
+        }}
+      />
       {images.length === 0 ? (
         <p className="py-3 text-center text-2xs text-ink/45">
           暂无图片，请上传区域图（可多选）
@@ -684,12 +712,20 @@ function AreaImagesEditor({
           ))}
         </ul>
       )}
-      <button
-        onClick={() => fileRef.current?.click()}
-        className="mt-2 w-full rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500"
-      >
-        <Upload size={12} className="mr-1 inline" /> 上传区域图片（可多选）
-      </button>
+      <div className="mt-2 flex gap-2">
+        <button
+          onClick={() => fileRef.current?.click()}
+          className="flex-1 rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
+        >
+          <Upload size={12} className="mr-1 inline" /> 上传区域图片（可多选）
+        </button>
+        <button
+          onClick={() => cameraRef.current?.click()}
+          className="flex-1 rounded border border-dashed border-line py-1.5 text-2xs text-ink/55 hover:border-clay-400 hover:text-clay-500 transition-colors"
+        >
+          <Camera size={12} className="mr-1 inline" /> 拍照添加
+        </button>
+      </div>
       <p className="mt-1.5 text-center text-2xs text-ink/35">
         支持一次选择多张：总图、设施图、某面墙等，已自动保存
       </p>
