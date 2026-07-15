@@ -39,7 +39,13 @@ export default function SafeImage({
     }
     loadingTimeoutRef.current = window.setTimeout(() => {
       loadingTimeoutRef.current = null;
-      setStatus("error");
+      // 超时前再检查一次：图片可能已加载完成但 onLoad 事件被 StrictMode 双挂载吞掉
+      const img = imageRef.current;
+      if (img?.complete && img.naturalWidth > 0) {
+        setStatus("loaded");
+      } else {
+        setStatus("error");
+      }
     }, 10_000);
     return () => {
       if (loadingTimeoutRef.current !== null) {

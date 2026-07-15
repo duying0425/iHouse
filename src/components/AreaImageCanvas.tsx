@@ -41,13 +41,27 @@ export default function AreaImageCanvas({
   className,
 }: AreaImageCanvasProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const imgRef = useRef<HTMLImageElement>(null);
   const [hoverId, setHoverId] = useState<string | undefined>();
   const [imageState, setImageState] = useState<"loading" | "loaded" | "error">("loading");
 
   useEffect(() => {
     setImageState(image?.url ? "loading" : "error");
     if (!image?.url) return;
-    const timer = window.setTimeout(() => setImageState("error"), 10_000);
+    // 缓存图片可能在 effect 执行前就已完成载入，避免错过 load 事件后误判超时。
+    if (imgRef.current?.complete) {
+      setImageState(imgRef.current.naturalWidth > 0 ? "loaded" : "error");
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      // 超时前再检查一次：图片可能已加载完成但 onLoad 事件被 StrictMode 双挂载吞掉
+      const img = imgRef.current;
+      if (img?.complete && img.naturalWidth > 0) {
+        setImageState("loaded");
+      } else {
+        setImageState("error");
+      }
+    }, 10_000);
     return () => window.clearTimeout(timer);
   }, [image?.url]);
 
@@ -98,6 +112,7 @@ export default function AreaImageCanvas({
       )}
     >
       <img
+        ref={imgRef}
         src={image.url}
         alt={image.label || "区域图片"}
         className={cn("block h-auto w-full pointer-events-none", imageState !== "loaded" && "invisible")}
