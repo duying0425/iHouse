@@ -37,7 +37,10 @@
 - **每个区域支持 1 张或多张图**（区域总图、设施图、某面墙等），可编辑标签，多选上传保持顺序
 
 ### 3.3 物品/设施录入
-- 录入字段：名称、分类、品牌、规格、购买日期、价格、备注、主图、多张附属图（gallery）、使用说明、储物单元内部清单（contents）
+- 录入字段：名称、分类、品牌、规格、购买日期、价格、备注、主图、多张附属图（gallery）、使用说明、储物单元内部快捷清单（contents）
+- 储物空间支持两类内容：无需档案的小物品保存在快捷清单；需要品牌、照片、维护等资料的物品登记为完整 Item，通过 `containerItemId` 关联，避免复制档案
+- 支持在储物空间内新建完整物品、关联已有物品、移出到当前/其他区域，移动容器时完整收纳子树随之移动
+- 删除容器时不级联删除正式物品，直接子物品自动提升到容器的上一级位置；禁止自我收纳和循环收纳
 - 分类：家电 / 家具 / 储物 / 装饰 / 管线设施 / 其他，每类有展示色
 - **位置标注**：录入时直接在区域图上点选位置，红色标记点直观展示
 - **图片录入方式**：
@@ -57,7 +60,7 @@
 - 维护状态 5 档：none（无需维护）/ ok（正常）/ due-soon（即将到期）/ overdue（已过期）/ pending-setup（待首次维护）
 
 ### 3.5 检索
-- 按关键词（名称/品牌/规格/备注/区域名/使用说明/内部物品清单模糊匹配）
+- 按关键词（名称/品牌/规格/备注/区域名/使用说明/快捷清单/正式容器路径模糊匹配）
 - 按分类、品牌、区域筛选
 - 按名称 / 购买日期 / 价格排序
 
@@ -80,7 +83,7 @@
 ### 3.8 数据维护
 - 一键导出 JSON 备份（跨设备/跨环境迁移）
 - 导入 JSON 备份恢复
-- 旧版本数据自动迁移（v1 → v2 schema）
+- 旧版本数据自动迁移（v1/v2 → v3 schema）
 
 ### 3.9 结构化查询 API（为 AI 智能化预留）
 房屋数据 API `/api/houses/:id/data` 返回完整 JSON blob，适合前端整体加载；为未来接入 AI 助手（"我家还有什么没维护？""遥控器放哪了？"），新增一组按语义维度切分的查询端点。所有查询要求登录并携带有权访问的 `houseId`：
@@ -100,6 +103,7 @@
 
 ```
 Home
+├── schemaVersion: 3         // houses.data 文档结构版本
 ├── title: string            // 居所名称
 ├── subtitle?: string        // 副标题
 ├── floorPlanImage: string   // 户型图（base64）
@@ -127,13 +131,15 @@ Home
             ├── gallery?: string[]     // 附属图
             ├── areaImageId?: string   // 关联到 AreaImage.id
             ├── areaImagePos?: {x, y}  // 在该区域图上的位置（百分比）
-            ├── contents?: StorageEntry[]  // 储物单元内部清单
+            ├── containerItemId?: string   // 收纳于另一正式物品
+            ├── containerSlot?: string     // 容器内位置
+            ├── contents?: StorageEntry[]  // 储物单元内部快捷清单
             ├── usage?: string         // 使用说明
             ├── maintenanceCycle?: number       // 维护周期（天）
             └── lastMaintenanceDate?: string    // 上次维护日期 YYYY-MM-DD
 ```
 
-存储方式：整个 Home 对象序列化为 JSON，存入 SQLite 单行（`id=1`），整体覆盖写入。
+存储方式：系统数据库为 SQLite；每套房屋的 Home 对象序列化为 JSON 后存入 `houses.data TEXT`，按房屋整体覆盖写入，图片保存为独立文件。`schemaVersion` 是 JSON 文档版本，不是 SQLite 表结构版本。
 
 ## 5. 非功能性需求
 

@@ -81,15 +81,15 @@
 - `visibilitychange` 监听：页面隐藏时用 `keepalive: true` 尽力推送最后一次变更
 - 单用户场景采用 **last-write-wins**，不做冲突合并
 
-**SQLite 单行存储**：整个 Home 对象序列化为 JSON 存入 `home` 表 `id=1` 行。读写都是整体覆盖，简单可靠，单用户场景下无并发问题。
+**SQLite + JSON 文档列**：SQLite 是真实数据库；每套房屋的 Home 对象序列化为 JSON 存入 `houses.data TEXT`。`users/sessions/house_members` 使用关系表，房屋业务文档按房屋整体覆盖。旧 `home(id=1)` 表仅保留给历史单房屋数据迁移。
 
 ### 3.2 状态管理（`src/store.ts`）
 
 zustand + persist 中间件，关键点：
 - `partialize`：排除 `_hasHydrated` 标志，不持久化
 - `onRehydrateStorage`：水合完成后置 `_hasHydrated = true`，门控首屏避免示例数据闪现
-- `migrate`：v1 → v2 schema 迁移（`overviewImage/detailImage` 合并为 `images[]`，`item.floorPlanPos` 迁移为 `areaImageId/areaImagePos`）
-- `version: 2`：persist 版本号
+- `migrate`：v1 → v2 处理区域多图；v2 → v3 增加房屋文档版本和正式物品收纳关系
+- `version: 3`：persist 版本号；`normalizeHomeData` 同时清理悬空/循环引用，并把收纳子树归一到容器所在区域
 
 ### 3.3 图片处理
 
@@ -97,8 +97,8 @@ zustand + persist 中间件，关键点：
   - 户型图 ≤2000px
   - 区域图 ≤1600px
   - 物品图 ≤1200px
-- **存储为 base64**：直接嵌入 JSON，随 Home 一起存 SQLite，无需独立文件存储
-- **代价**：SQLite 单行可能达到几 MB（含多张图），`express.json({ limit: "256mb" })` 放宽请求体限制
+- **存储为图片文件**：前端上传压缩后的 base64，服务端按内容哈希写入 `server/data/images/`，Home JSON 只保留 `/api/images/...` URL
+- **兼容旧数据**：服务端仍可识别 Home JSON 中的 base64，并在写入或备份导入时提取为图片文件；`express.json({ limit: "256mb" })` 兼容迁移请求
 
 ### 3.4 PDF 导出
 
@@ -137,8 +137,8 @@ zustand + persist 中间件，关键点：
 **设计要点**：
 - **纯函数 + 路由层分离**：核心查询逻辑（`buildSummary` / `listAreas` / `getAreaById` / `searchItems` / `getItemById` / `listLocations`）抽到 `server/query.js` 作为纯函数，不依赖数据库与 HTTP，路由层只负责读取 DB、调用纯函数、附带 `updatedAt`。便于单元测试，也便于未来 AI Agent 直接 `import` 复用。
 - **统一返回格式**：`{ ok, ..., updatedAt }`，调用方可判断数据新鲜度
-- **物品搜索**：关键词匹配覆盖 名称 / 品牌 / 规格 / 备注 / 使用说明 / 储物单元内部清单（contents），全小写子串匹配
-- **位置索引**：`/api/query/locations` 专为"东西放哪了"类查询设计，精简字段（itemId / name / areaName / areaImagePos / contents）
+- **物品搜索**：关键词匹配覆盖 名称 / 品牌 / 规格 / 备注 / 使用说明 / 快捷清单 / 容器路径与容器内位置，全小写子串匹配
+- **位置索引**：`/api/query/locations` 返回区域坐标或正式容器关系（`containerItemId/containerName/containerSlot/locationPath`）
 - **访问隔离**：所有端点要求 Bearer Token，并通过必填的 `houseId`（查询参数或 `x-house-id` 请求头）校验房屋成员权限
 
 **端点清单**：
@@ -152,7 +152,7 @@ zustand + persist 中间件，关键点：
 | `GET /api/query/items/:itemId` | `?houseId=` | 物品详情 + 所属区域 + 区域图位置 |
 | `GET /api/query/locations` | `?houseId=&area=&category=` | 物品位置索引 |
 
-**测试**：`server/query.test.js` 34 个用例，覆盖空 home 容错、分类/品牌/关键词组合过滤、储物单元 contents 搜索、Top 10 截断、404 路径、字段完整性等。
+**测试**：`server/query.test.js` 37 个用例，覆盖空 home 容错、组合过滤、快捷清单与正式容器路径搜索、位置字段、404 路径等。
 
 ### 3.7 路由与页面
 
@@ -199,7 +199,7 @@ pnpm test server/api.test.js                 # 仅 API 集成测试
 $env:DEBUG_SERVER=1; pnpm test server/api.test.js   # 带 server 日志
 ```
 
-**当前规模**：11 个测试文件，180 个用例，约 2-3 秒完成。
+**当前规模**：12 个测试文件，191 个用例，约 2-3 秒完成。
 
 ## 4. 项目结构
 
@@ -320,13 +320,15 @@ CMD ["node", "server/index.js"]
 - **方式三（纯前端迁移）**：浏览器 IndexedDB 缓存会在首次访问时自动读取并同步到新服务器（不含图片文件）
 
 ### 6.2 Schema 迁移
-persist 中间件 `version: 2` + `migrate` 函数自动处理 v1 → v2：
+persist 中间件 `version: 3` + `migrate`/`normalizeHomeData` 自动处理：
 - `area.overviewImage/detailImage` → `area.images[]`
 - `item.floorPlanPos` → `item.areaImageId/areaImagePos`
+- v2 文档补 `schemaVersion: 3`；原有物品不变，新增 `containerItemId/containerSlot` 均为可选字段
+- 修复悬空与循环容器引用；跨区域引用的子物品迁到容器区域并清除失效图坐标
+- 服务器数据、离线 IndexedDB 缓存和导入备份均经过同一规范化入口；SQLite 表结构无需迁移
 
 ## 7. 已知限制
 
-- SQLite 单行存全量 JSON：单用户场景够用，但全量写入开销随数据增长而增加（目前几 MB 量级无问题）
-- 图片存 base64：体积膨胀约 33%，但简化了存储（无独立文件管理）
+- SQLite 每套房屋以一份 JSON 文档整体写入：家庭场景够用，但全量写入开销随数据增长而增加
 - last-write-wins：多设备同时编辑可能互相覆盖（单用户家庭场景风险低）
 - 离屏截图方案已完全废弃，统一使用浏览器原生打印，保障导出效率与文字矢量清晰度

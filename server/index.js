@@ -537,6 +537,7 @@ app.post("/api/houses", requireAuth, (req, res) => {
   const houseId = generateHouseId();
   const now = new Date().toISOString();
   const initialData = JSON.stringify({
+    schemaVersion: 3,
     title: name,
     subtitle: "居所图鉴",
     floorPlanImage: "",

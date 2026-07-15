@@ -198,6 +198,13 @@ export default function SearchPage() {
                   <ItemCard
                     item={r.item}
                     areaName={r.area.name}
+                    containerName={
+                      r.item.containerItemId
+                        ? areas
+                            .flatMap((area) => area.items)
+                            .find((item) => item.id === r.item.containerItemId)?.name
+                        : undefined
+                    }
                     highlighted={activeId === r.item.id}
                   />
                 </div>

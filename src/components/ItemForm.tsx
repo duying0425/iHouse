@@ -15,9 +15,11 @@ interface ItemFormProps {
   value: ItemFormValue;
   onChange: (v: ItemFormValue) => void;
   areaId: string;
+  /** 收纳于正式物品时，不再直接标注区域图坐标。 */
+  containedInName?: string;
 }
 
-export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
+export default function ItemForm({ value, onChange, areaId, containedInName }: ItemFormProps) {
   const { areas } = useHomeStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -36,18 +38,19 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
 
   // 若 value.areaImageId 不在该区域的图片里（或为空），自动选第一张
   useEffect(() => {
+    if (containedInName) return;
     if (images.length === 0) return;
     const valid = images.some((img) => img.id === value.areaImageId);
     if (!valid && value.areaImageId !== images[0].id) {
       onChange({ ...valueRef.current, areaImageId: images[0].id });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length, value.areaImageId]);
+  }, [images.length, value.areaImageId, containedInName]);
 
   const set = <K extends keyof ItemFormValue>(k: K, v: ItemFormValue[K]) =>
     onChange({ ...valueRef.current, [k]: v });
 
-  // 储物单元内部物品清单操作
+  // 储物单元内部快捷清单操作
   const addContent = () => {
     const entry: StorageEntry = { id: genId("cnt"), name: "", quantity: "", remark: "" };
     onChange({ ...valueRef.current, contents: [...valueRef.current.contents, entry] });
@@ -510,7 +513,7 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
           >
             <Box size={14} className="text-ochre" />
             <h4 className="font-serif text-sm font-semibold text-ink">
-              内部物品清单
+              内部快捷清单
             </h4>
             <span className="text-2xs text-ink/45">
               {value.contents.length > 0
@@ -579,8 +582,19 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
         </div>
 
         {/* 区域图位置点选 */}
-        <div className="card p-4">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+        {containedInName ? (
+          <div className="card flex items-start gap-3 p-4">
+            <Box size={17} className="mt-0.5 shrink-0 text-ochre" />
+            <div>
+              <h4 className="font-serif text-sm font-semibold text-ink">收纳于 {containedInName}</h4>
+              <p className="mt-1 text-2xs leading-relaxed text-ink/50">
+                该物品的位置由储物空间继承，无需在区域图上重复标注。保存后可在详情页更改位置或移出储物空间。
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="card p-4">
+            <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <MapPin size={14} className="text-ochre" />
             <h4 className="font-serif text-sm font-semibold text-ink">
               在区域图上点选位置
@@ -594,9 +608,9 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
                 清除位置
               </button>
             )}
-          </div>
+            </div>
 
-          {images.length > 1 && (
+            {images.length > 1 && (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {images.map((img) => (
                 <button
@@ -614,9 +628,9 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
                 </button>
               ))}
             </div>
-          )}
+            )}
 
-          {currentImage ? (
+            {currentImage ? (
             <AreaImageCanvas
               image={currentImage}
               pickable
@@ -624,23 +638,24 @@ export default function ItemForm({ value, onChange, areaId }: ItemFormProps) {
               onPick={(pos) => set("areaImagePos", pos)}
               compact
             />
-          ) : (
+            ) : (
             <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-2 bg-clay-50 text-ink/40">
               <ImagePlus size={28} />
               <span className="text-2xs">
                 该区域暂无图片，请先到「户型设置」为区域添加图片
               </span>
             </div>
-          )}
+            )}
 
-          <p className="mt-2 text-2xs text-ink/45">
-            {value.areaImagePos
-              ? `已标注位置 (${value.areaImagePos.x.toFixed(1)}, ${value.areaImagePos.y.toFixed(1)})`
-              : currentImage
-              ? "点击区域图片任意位置以标注该物品"
-              : "—"}
-          </p>
-        </div>
+            <p className="mt-2 text-2xs text-ink/45">
+              {value.areaImagePos
+                ? `已标注位置 (${value.areaImagePos.x.toFixed(1)}, ${value.areaImagePos.y.toFixed(1)})`
+                : currentImage
+                ? "点击区域图片任意位置以标注该物品"
+                : "—"}
+            </p>
+          </div>
+        )}
 
         {touched && !value.name && (
           <p className="text-2xs text-ochre">请填写物品名称</p>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronRight, Save, X } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import ItemForm from "@/components/ItemForm";
@@ -12,9 +12,12 @@ import { imageOf } from "@/utils/image";
 export default function ItemFormPage() {
   const { areaId = "" } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { areas, addItem } = useHomeStore();
 
   const area = areas.find((a) => a.id === areaId);
+  const requestedContainerId = searchParams.get("container") ?? undefined;
+  const container = area?.items.find((item) => item.id === requestedContainerId);
   const [value, setValue] = useState<ItemFormValue>(itemToFormValue());
   // 防止多次点击重复保存
   const [saving, setSaving] = useState(false);
@@ -59,8 +62,9 @@ export default function ItemFormPage() {
           value.image ||
           imageOf(value.name + " 产品图", "square"),
         gallery: value.gallery,
-        areaImageId: value.areaImageId || undefined,
-        areaImagePos: value.areaImagePos || undefined,
+        areaImageId: container ? undefined : value.areaImageId || undefined,
+        areaImagePos: container ? undefined : value.areaImagePos || undefined,
+        containerItemId: container?.id,
         contents: normalizeContents(value.contents),
         usage: value.usage.trim() || undefined,
         maintenanceCycle: value.maintenanceCycle
@@ -79,7 +83,9 @@ export default function ItemFormPage() {
   return (
     <PageLayout
       title={`录入 · ${area.name}`}
-      subtitle={`为 ${area.name} 添加一件物品或设施`}
+      subtitle={container
+        ? `在「${container.name}」内登记一件完整物品`
+        : `为 ${area.name} 添加一件物品或设施`}
     >
       <nav className="mb-5 flex items-center gap-1 text-2xs text-ink/45">
         <Link to="/" className="hover:text-clay-500">
@@ -93,7 +99,18 @@ export default function ItemFormPage() {
         <span className="text-ink/70">录入物品</span>
       </nav>
 
-      <ItemForm value={value} onChange={setValue} areaId={areaId} />
+      {requestedContainerId && !container && (
+        <div className="mb-4 rounded border border-ochre/30 bg-ochre/5 px-3 py-2 text-xs text-ochre">
+          指定的储物空间不存在，将作为区域内独立物品登记。
+        </div>
+      )}
+
+      <ItemForm
+        value={value}
+        onChange={setValue}
+        areaId={areaId}
+        containedInName={container?.name}
+      />
 
       <div className="action-bar sticky bottom-0 z-20 -mb-5 mt-8 flex items-center gap-2 border-t border-line bg-paper/95 py-3 backdrop-blur-md sm:-mb-8 sm:justify-end">
         <Link to={`/area/${areaId}`} className="btn-secondary shrink-0">

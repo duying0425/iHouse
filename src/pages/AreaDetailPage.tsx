@@ -274,7 +274,15 @@ export default function AreaDetailPage() {
                 }}
                 onMouseLeave={() => setHoverId(undefined)}
               >
-                <ItemCard item={item} highlighted={hoverId === item.id} />
+                <ItemCard
+                  item={item}
+                  containerName={
+                    item.containerItemId
+                      ? area.items.find((candidate) => candidate.id === item.containerItemId)?.name
+                      : undefined
+                  }
+                  highlighted={hoverId === item.id}
+                />
               </div>
             ))}
           </div>

@@ -60,6 +60,10 @@ export interface Item {
   /** 物品在所属区域某张图上的位置（关联到 AreaImage） */
   areaImageId?: string;
   areaImagePos?: AnchorPosition;
+  /** 当前收纳于另一件正式物品；正式档案始终只保存一份 */
+  containerItemId?: string;
+  /** 在容器内的具体位置，如“右侧下层” */
+  containerSlot?: string;
   /** 当物品为储物单元（抽屉/冰箱/柜子等）时，内部存放的物品清单 */
   contents?: StorageEntry[];
   /** 使用说明（可选，如电视机/微波炉等设备的操作指引） */
@@ -93,11 +97,27 @@ export interface Area {
 
 /** 整屋 */
 export interface Home {
+  /** houses.data JSON 文档的结构版本；SQLite 表结构不随此版本变化 */
+  schemaVersion?: number;
   title: string;
   subtitle?: string;
   floorPlanImage: string;
   areas: Area[];
 }
+
+/** 移动物品时可选择直接放在区域内，或收纳于另一件正式物品。 */
+export type ItemDestination =
+  | {
+      kind: "area";
+      areaId: string;
+      areaImageId?: string;
+      areaImagePos?: AnchorPosition;
+    }
+  | {
+      kind: "container";
+      containerItemId: string;
+      containerSlot?: string;
+    };
 
 /** 检索条件 */
 export interface SearchQuery {

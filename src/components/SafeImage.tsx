@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Tv, Sofa, Box, Palette, Wrench, HelpCircle, Loader2 } from "lucide-react";
 import type { Category } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
@@ -21,13 +21,32 @@ export default function SafeImage({
   ...props
 }: SafeImageProps) {
   const [status, setStatus] = useState<"loading" | "loaded" | "error">(src ? "loading" : "error");
+  const imageRef = useRef<HTMLImageElement>(null);
+  const loadingTimeoutRef = useRef<number | null>(null);
 
   // 当 src 改变时重置错误状态
   useEffect(() => {
+    if (loadingTimeoutRef.current !== null) {
+      window.clearTimeout(loadingTimeoutRef.current);
+      loadingTimeoutRef.current = null;
+    }
     setStatus(src ? "loading" : "error");
     if (!src) return;
-    const timer = window.setTimeout(() => setStatus("error"), 10_000);
-    return () => window.clearTimeout(timer);
+    // 缓存图片可能在 effect 执行前就已完成载入，避免错过 load 事件后误判超时。
+    if (imageRef.current?.complete) {
+      setStatus(imageRef.current.naturalWidth > 0 ? "loaded" : "error");
+      return;
+    }
+    loadingTimeoutRef.current = window.setTimeout(() => {
+      loadingTimeoutRef.current = null;
+      setStatus("error");
+    }, 10_000);
+    return () => {
+      if (loadingTimeoutRef.current !== null) {
+        window.clearTimeout(loadingTimeoutRef.current);
+        loadingTimeoutRef.current = null;
+      }
+    };
   }, [src]);
 
   const color = CATEGORY_COLOR[category] || "#6B6258";
@@ -70,13 +89,22 @@ export default function SafeImage({
   return (
     <>
       <img
+        ref={imageRef}
         src={src}
         alt={alt}
         onLoad={(event) => {
+          if (loadingTimeoutRef.current !== null) {
+            window.clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
           setStatus("loaded");
           onLoad?.(event);
         }}
         onError={(event) => {
+          if (loadingTimeoutRef.current !== null) {
+            window.clearTimeout(loadingTimeoutRef.current);
+            loadingTimeoutRef.current = null;
+          }
           setStatus("error");
           onError?.(event);
         }}

@@ -19,6 +19,8 @@
  * @property {string[]} [gallery]
  * @property {string} [areaImageId]
  * @property {{x:number,y:number}} [areaImagePos]
+ * @property {string} [containerItemId]
+ * @property {string} [containerSlot]
  * @property {Array<{id:string,name:string,quantity?:string,remark?:string}>} [contents]
  * @property {number} [maintenanceCycle]
  * @property {string} [lastMaintenanceDate]
@@ -56,6 +58,35 @@
  */
 function getAreas(home) {
   return (home && home.areas) || [];
+}
+
+function buildItemIndex(home) {
+  const index = new Map();
+  for (const area of getAreas(home)) {
+    for (const item of area.items || []) index.set(item.id, { item, area });
+  }
+  return index;
+}
+
+function containerContext(item, index) {
+  const names = [];
+  const seen = new Set([item.id]);
+  let parentId = item.containerItemId;
+  let directContainer = null;
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = index.get(parentId);
+    if (!parent) break;
+    if (!directContainer) directContainer = parent;
+    names.unshift(parent.item.name);
+    parentId = parent.item.containerItemId;
+  }
+  return {
+    container: directContainer
+      ? { id: directContainer.item.id, name: directContainer.item.name }
+      : null,
+    containerNames: names,
+  };
 }
 
 /**
@@ -134,13 +165,15 @@ export function getAreaById(home, areaId) {
  * 收集物品的可搜索文本（小写）
  * @param {Item} it
  */
-function itemSearchText(it) {
+function itemSearchText(it, containerNames = []) {
   return [
     it.name,
     it.brand,
     it.spec,
     it.remark,
     it.usage,
+    ...containerNames,
+    it.containerSlot,
     ...(it.contents || []).map((c) => `${c.name} ${c.quantity || ""} ${c.remark || ""}`),
   ]
     .filter(Boolean)
@@ -158,13 +191,21 @@ export function searchItems(home, filters = {}) {
   const keyword = typeof q === "string" ? q.trim().toLowerCase() : "";
 
   const items = [];
+  const index = buildItemIndex(home);
   for (const a of getAreas(home)) {
     if (area && a.id !== area) continue;
     for (const it of a.items || []) {
       if (category && it.category !== category) continue;
       if (brand && it.brand !== brand) continue;
-      if (keyword && !itemSearchText(it).includes(keyword)) continue;
-      items.push({ ...it, areaId: a.id, areaName: a.name });
+      const context = containerContext(it, index);
+      if (keyword && !itemSearchText(it, context.containerNames).includes(keyword)) continue;
+      items.push({
+        ...it,
+        areaId: a.id,
+        areaName: a.name,
+        containerName: context.container?.name,
+        locationPath: [a.name, ...context.containerNames],
+      });
     }
   }
   return { ok: true, count: items.length, items };
@@ -177,9 +218,11 @@ export function searchItems(home, filters = {}) {
  * @returns {{ok:boolean, item?:Item, area?:object, areaImage?:AreaImage|null, error?:string}}
  */
 export function getItemById(home, itemId) {
+  const index = buildItemIndex(home);
   for (const a of getAreas(home)) {
     const item = (a.items || []).find((i) => i.id === itemId);
     if (item) {
+      const context = containerContext(item, index);
       const areaImage = (a.images || []).find((img) => img.id === item.areaImageId) || null;
       return {
         ok: true,
@@ -190,6 +233,8 @@ export function getItemById(home, itemId) {
           description: a.description,
         },
         areaImage,
+        container: context.container,
+        locationPath: [a.name, ...context.containerNames],
       };
     }
   }
@@ -205,10 +250,12 @@ export function getItemById(home, itemId) {
 export function listLocations(home, filters = {}) {
   const { area, category } = filters;
   const locations = [];
+  const index = buildItemIndex(home);
   for (const a of getAreas(home)) {
     if (area && a.id !== area) continue;
     for (const it of a.items || []) {
       if (category && it.category !== category) continue;
+      const context = containerContext(it, index);
       locations.push({
         itemId: it.id,
         name: it.name,
@@ -218,6 +265,10 @@ export function listLocations(home, filters = {}) {
         areaName: a.name,
         areaImageId: it.areaImageId || null,
         areaImagePos: it.areaImagePos || null,
+        containerItemId: it.containerItemId || null,
+        containerName: context.container?.name || null,
+        containerSlot: it.containerSlot || null,
+        locationPath: [a.name, ...context.containerNames],
         contents: it.contents || [],
       });
     }

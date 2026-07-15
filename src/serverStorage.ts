@@ -1,6 +1,6 @@
 import type { StateStorage } from "zustand/middleware";
 import { useAuthStore } from "@/authStore";
-import { normalizeHomeData } from "@/utils/homeData";
+import { CURRENT_HOME_SCHEMA_VERSION, normalizeHomeData } from "@/utils/homeData";
 
 /**
  * 服务器优先的持久化存储（多房屋 + 鉴权版本）。
@@ -205,9 +205,17 @@ export const serverStorage: StateStorage = {
             (a: { overviewImage?: unknown; detailImage?: unknown; images?: unknown[] }) =>
               (a.overviewImage || a.detailImage) && !Array.isArray(a.images)
           );
+          const sourceVersion = typeof state.schemaVersion === "number"
+            ? state.schemaVersion
+            : isV1
+              ? 1
+              : 2;
           const normalized = normalizeHomeData(state);
           if (!normalized) return null;
-          const wrapped = JSON.stringify({ state: normalized, version: isV1 ? 1 : 2 });
+          const wrapped = JSON.stringify({
+            state: normalized,
+            version: Math.min(sourceVersion, CURRENT_HOME_SCHEMA_VERSION),
+          });
           // 刷新本地缓存
           idbCache.setItem(cacheKey(name, houseId), wrapped);
           if (currentHouseId !== houseId) return null;

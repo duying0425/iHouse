@@ -1,5 +1,7 @@
 import { CATEGORIES, type Area, type Category, type Home, type Item } from "@/types";
 
+export const CURRENT_HOME_SCHEMA_VERSION = 3;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -32,6 +34,14 @@ function normalizeItem(value: unknown, areaId: string, index: number): Item {
     category,
     image: typeof item.image === "string" ? item.image : "",
     gallery,
+    containerItemId:
+      typeof item.containerItemId === "string" && item.containerItemId
+        ? item.containerItemId
+        : undefined,
+    containerSlot:
+      typeof item.containerSlot === "string" && item.containerSlot.trim()
+        ? item.containerSlot.trim()
+        : undefined,
   } as Item;
 }
 
@@ -66,15 +76,76 @@ function normalizeArea(value: unknown, index: number, total: number): Area {
   } as Area;
 }
 
+/**
+ * 修复导入数据或旧缓存中的悬空/循环容器关系，并保证一整棵收纳树属于同一区域。
+ * contained item 的区域图坐标会被清除，其位置由容器继承。
+ */
+function normalizeContainerRelations(areas: Area[]): Area[] {
+  const items = areas.flatMap((area) => area.items);
+  const index = new Map(items.map((item) => [item.id, item]));
+  const originalArea = new Map<string, string>();
+  for (const area of areas) {
+    for (const item of area.items) originalArea.set(item.id, area.id);
+  }
+
+  // 先清理悬空、自引用与循环。清除当前节点即可打断整条环。
+  for (const item of items) {
+    if (!item.containerItemId) continue;
+    const seen = new Set<string>([item.id]);
+    let parentId: string | undefined = item.containerItemId;
+    while (parentId) {
+      if (seen.has(parentId)) {
+        item.containerItemId = undefined;
+        item.containerSlot = undefined;
+        break;
+      }
+      seen.add(parentId);
+      const parent = index.get(parentId);
+      if (!parent) {
+        item.containerItemId = undefined;
+        item.containerSlot = undefined;
+        break;
+      }
+      parentId = parent.containerItemId;
+    }
+  }
+
+  const areaMemo = new Map<string, string>();
+  const resolveArea = (item: Item): string => {
+    const cached = areaMemo.get(item.id);
+    if (cached) return cached;
+    const parent = item.containerItemId ? index.get(item.containerItemId) : undefined;
+    const areaId = parent
+      ? resolveArea(parent)
+      : originalArea.get(item.id) ?? areas[0]?.id ?? "";
+    areaMemo.set(item.id, areaId);
+    return areaId;
+  };
+
+  const byArea = new Map<string, Item[]>();
+  for (const item of items) {
+    const areaId = resolveArea(item);
+    const normalized: Item = item.containerItemId
+      ? { ...item, areaId, areaImageId: undefined, areaImagePos: undefined }
+      : { ...item, areaId };
+    const list = byArea.get(areaId) ?? [];
+    list.push(normalized);
+    byArea.set(areaId, list);
+  }
+  return areas.map((area) => ({ ...area, items: byArea.get(area.id) ?? [] }));
+}
+
 /** 将旧版、导入或测试产生的残缺房屋数据补齐为前端可安全渲染的结构。 */
 export function normalizeHomeData(value: unknown): Home | null {
   if (!isRecord(value)) return null;
   const rawAreas = Array.isArray(value.areas) ? value.areas : [];
+  const areas = rawAreas.map((area, index) => normalizeArea(area, index, rawAreas.length));
   return {
     ...value,
+    schemaVersion: CURRENT_HOME_SCHEMA_VERSION,
     title: typeof value.title === "string" && value.title ? value.title : "我的居所",
     subtitle: typeof value.subtitle === "string" ? value.subtitle : undefined,
     floorPlanImage: typeof value.floorPlanImage === "string" ? value.floorPlanImage : "",
-    areas: rawAreas.map((area, index) => normalizeArea(area, index, rawAreas.length)),
+    areas: normalizeContainerRelations(areas),
   } as Home;
 }

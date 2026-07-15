@@ -12,6 +12,7 @@ const img = (prompt: string, size: "landscape_4_3" | "square" = "square") =>
  * - 每个区域含 1~2 张区域图(images)，物品位置(areaImagePos)标在对应区域图上
  */
 export const seedHome: Home = {
+  schemaVersion: 3,
   title: "城南·溪岸花园 3-2-1801",
   subtitle: "居所图鉴 · 居家设施与物品档案",
   floorPlanImage: "builtin-floorplan",

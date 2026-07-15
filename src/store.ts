@@ -6,11 +6,19 @@ import type {
   AreaImage,
   Home,
   Item,
+  ItemDestination,
   SearchQuery,
   SearchResult,
 } from "@/types";
 import { cloneSeed, collectBrands, genId } from "@/data/seed";
 import { serverStorage, setReloading } from "@/serverStorage";
+import { normalizeHomeData } from "@/utils/homeData";
+import {
+  getDirectContainedItems,
+  getItemLocationPath,
+  moveItemInAreas,
+  removeItemFromAreas,
+} from "@/utils/itemLocation";
 
 let reloadGeneration = 0;
 
@@ -32,12 +40,14 @@ interface HomeState extends Home {
   getArea: (areaId: string) => Area | undefined;
   getItem: (areaId: string, itemId: string) =>
     { item: Item; area: Area } | undefined;
+  getContainedItems: (containerItemId: string) => Item[];
   allBrands: () => string[];
   search: (query: SearchQuery) => SearchResult[];
 
   // 录入 / 编辑 / 删除
   addItem: (areaId: string, item: Omit<Item, "id" | "areaId">) => Item;
   updateItem: (areaId: string, itemId: string, patch: Partial<Item>) => void;
+  moveItem: (itemId: string, destination: ItemDestination) => Item;
   removeItem: (areaId: string, itemId: string) => void;
 
   addArea: (area: Omit<Area, "id" | "items">) => Area;
@@ -103,6 +113,9 @@ export const useHomeStore = create<HomeState>()(
         return { item, area };
       },
 
+      getContainedItems: (containerItemId) =>
+        getDirectContainedItems(get().areas, containerItemId),
+
       allBrands: () => collectBrands(get().areas),
 
       search: (query) => {
@@ -135,7 +148,7 @@ export const useHomeStore = create<HomeState>()(
                 item.spec,
                 item.remark,
                 item.usage,
-                area.name,
+                ...getItemLocationPath(areas, item.id),
                 ...contentParts,
               ]
                 .filter(Boolean)
@@ -195,14 +208,15 @@ export const useHomeStore = create<HomeState>()(
         }));
       },
 
+      moveItem: (itemId, destination) => {
+        const result = moveItemInAreas(get().areas, itemId, destination);
+        set({ areas: result.areas });
+        return result.item;
+      },
+
       removeItem: (areaId, itemId) => {
-        set((state) => ({
-          areas: state.areas.map((a) =>
-            a.id === areaId
-              ? { ...a, items: a.items.filter((i) => i.id !== itemId) }
-              : a
-          ),
-        }));
+        void areaId;
+        set((state) => ({ areas: removeItemFromAreas(state.areas, itemId).areas }));
       },
 
       addArea: (data) => {
@@ -292,6 +306,7 @@ export const useHomeStore = create<HomeState>()(
       /** 清空区域并切换为空白户型图（用户将上传自己的户型图） */
       startBlank: () => {
         set({
+          schemaVersion: 3,
           title: "我的居所",
           subtitle: "居所图鉴 · 居家设施与物品档案",
           floorPlanImage: "",
@@ -306,25 +321,27 @@ export const useHomeStore = create<HomeState>()(
       exportData: () => {
         const { title, subtitle, floorPlanImage, areas } = get();
         return JSON.stringify(
-          { version: 2, title, subtitle, floorPlanImage, areas },
+          { schemaVersion: 3, title, subtitle, floorPlanImage, areas },
           null,
           2
         );
       },
 
       importData: (json) => {
-        const data = JSON.parse(json) as Partial<Home>;
+        const data = normalizeHomeData(JSON.parse(json));
+        if (!data) throw new Error("备份数据格式无效");
         set({
-          title: data.title ?? "我的居所",
+          schemaVersion: 3,
+          title: data.title,
           subtitle: data.subtitle ?? "居所图鉴",
-          floorPlanImage: data.floorPlanImage ?? "",
-          areas: data.areas ?? [],
+          floorPlanImage: data.floorPlanImage,
+          areas: data.areas,
         });
       },
     }),
     {
       name: "home-atlas",
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => serverStorage),
       // 禁用自动 rehydrate：由 App.tsx 监听 currentHouseId 后手动触发
       // 避免 currentHouseId 为空时的无意义 rehydrate 与后续竞态
@@ -386,7 +403,8 @@ export const useHomeStore = create<HomeState>()(
             return rest;
           });
         }
-        return state as HomeState;
+        const normalized = normalizeHomeData({ ...state, schemaVersion: 3 });
+        return (normalized ?? state) as HomeState;
       },
       onRehydrateStorage: () => (state) => {
         if (state) state._hasHydrated = true;

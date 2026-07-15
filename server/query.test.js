@@ -88,6 +88,21 @@ const HOME = {
   ],
 };
 
+function homeWithContainedItem() {
+  const home = structuredClone(HOME);
+  home.areas[0].items.push({
+    id: "item-steamer",
+    areaId: "area-living",
+    name: "挂烫机",
+    category: "家电",
+    brand: "飞利浦",
+    image: "/api/images/steamer.png",
+    containerItemId: "item-drawer",
+    containerSlot: "右侧下层",
+  });
+  return home;
+}
+
 describe("buildSummary", () => {
   it("返回正确的区域数和物品数", () => {
     const s = buildSummary(HOME);
@@ -228,6 +243,16 @@ describe("searchItems", () => {
     expect(r.items[0].name).toBe("冰箱");
   });
 
+  it("正式收纳物品可通过容器名称检索并返回位置路径", () => {
+    const r = searchItems(homeWithContainedItem(), { q: "抽屉柜" });
+    const steamer = r.items.find((item) => item.id === "item-steamer");
+    expect(steamer).toMatchObject({
+      containerItemId: "item-drawer",
+      containerName: "抽屉柜",
+      locationPath: ["客厅", "抽屉柜"],
+    });
+  });
+
   it("关键词前后空白被裁剪", () => {
     expect(searchItems(HOME, { q: "  沙发  " }).count).toBe(1);
   });
@@ -262,6 +287,12 @@ describe("getItemById", () => {
     const r = getItemById(HOME, "item-drawer");
     expect(r.ok).toBe(true);
     expect(r.areaImage).toBeNull();
+  });
+
+  it("收纳物品详情附带直接容器和完整位置路径", () => {
+    const r = getItemById(homeWithContainedItem(), "item-steamer");
+    expect(r.container).toEqual({ id: "item-drawer", name: "抽屉柜" });
+    expect(r.locationPath).toEqual(["客厅", "抽屉柜"]);
   });
 
   it("不存在的物品返回 not found", () => {
@@ -300,6 +331,17 @@ describe("listLocations", () => {
     const drawer = r.locations.find((l) => l.itemId === "item-drawer");
     expect(drawer.contents).toHaveLength(2);
     expect(drawer.contents[0].name).toBe("电池");
+  });
+
+  it("正式收纳物品的位置索引包含容器信息", () => {
+    const r = listLocations(homeWithContainedItem());
+    const steamer = r.locations.find((location) => location.itemId === "item-steamer");
+    expect(steamer).toMatchObject({
+      containerItemId: "item-drawer",
+      containerName: "抽屉柜",
+      containerSlot: "右侧下层",
+      locationPath: ["客厅", "抽屉柜"],
+    });
   });
 
   it("按区域过滤", () => {

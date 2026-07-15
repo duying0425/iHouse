@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ChevronRight,
@@ -11,6 +11,9 @@ import {
   BookOpen,
   Layers,
   CalendarClock,
+  Link2,
+  Move,
+  Plus,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
@@ -26,11 +29,18 @@ import {
   cycleLabel,
   type MaintenanceStatus,
 } from "@/utils/maintenance";
+import {
+  findItemInAreas,
+  getDescendantIds,
+  getDirectContainedItems,
+  getItemLocationPath,
+  getItemLocationTrail,
+} from "@/utils/itemLocation";
 
 export default function ItemDetailPage() {
   const { areaId = "", itemId = "" } = useParams();
   const navigate = useNavigate();
-  const { areas, updateItem, removeItem } = useHomeStore();
+  const { areas, updateItem, moveItem, removeItem } = useHomeStore();
 
   const found = useMemo(
     () =>
@@ -44,6 +54,48 @@ export default function ItemDetailPage() {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<ItemFormValue>(itemToFormValue(found));
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [linkingExisting, setLinkingExisting] = useState(false);
+  const [linkItemId, setLinkItemId] = useState("");
+  const [linkSlot, setLinkSlot] = useState("");
+  const [moving, setMoving] = useState(false);
+  const [destinationKey, setDestinationKey] = useState("");
+  const [destinationSlot, setDestinationSlot] = useState("");
+  const [locationError, setLocationError] = useState<string | null>(null);
+
+  const container = useMemo(
+    () => found?.containerItemId
+      ? findItemInAreas(areas, found.containerItemId)
+      : undefined,
+    [areas, found?.containerItemId]
+  );
+  const containedItems = useMemo(
+    () => found ? getDirectContainedItems(areas, found.id) : [],
+    [areas, found]
+  );
+  const descendants = useMemo(
+    () => found ? getDescendantIds(areas, found.id) : new Set<string>(),
+    [areas, found]
+  );
+  const allItemEntries = useMemo(
+    () => areas.flatMap((candidateArea) =>
+      candidateArea.items.map((item) => ({ item, area: candidateArea }))
+    ),
+    [areas]
+  );
+  const linkCandidates = useMemo(() => {
+    if (!found) return [];
+    return allItemEntries.filter(({ item }) => {
+      if (item.id === found.id || descendants.has(item.id)) return false;
+      // found 已经收纳在候选物品之下时，反向关联会形成环。
+      return !getDescendantIds(areas, item.id).has(found.id);
+    });
+  }, [allItemEntries, areas, descendants, found]);
+  const containerCandidates = useMemo(
+    () => found
+      ? allItemEntries.filter(({ item }) => item.id !== found.id && !descendants.has(item.id))
+      : [],
+    [allItemEntries, descendants, found]
+  );
 
   if (!found || !area) {
     return (
@@ -73,8 +125,8 @@ export default function ItemDetailPage() {
       remark: value.remark.trim() || undefined,
       image: value.image,
       gallery: value.gallery,
-      areaImageId: value.areaImageId || undefined,
-      areaImagePos: value.areaImagePos || undefined,
+      areaImageId: found.containerItemId ? undefined : value.areaImageId || undefined,
+      areaImagePos: found.containerItemId ? undefined : value.areaImagePos || undefined,
       contents: normalizeContents(value.contents),
       usage: value.usage.trim() || undefined,
       maintenanceCycle: value.maintenanceCycle
@@ -86,9 +138,59 @@ export default function ItemDetailPage() {
   };
 
   const handleDelete = () => {
-    if (confirm(`确定删除「${found.name}」吗？此操作不可撤销。`)) {
+    const releaseTip = descendants.size > 0
+      ? `\n\n其中 ${descendants.size} 件正式物品都会保留；直属物品将移到「${container?.item.name || area.name}」。快捷清单会随本物品删除。`
+      : "";
+    if (confirm(`确定删除「${found.name}」吗？此操作不可撤销。${releaseTip}`)) {
       removeItem(areaId, itemId);
       navigate(`/area/${areaId}`);
+    }
+  };
+
+  const handleLinkExisting = () => {
+    if (!linkItemId) return;
+    setLocationError(null);
+    try {
+      moveItem(linkItemId, {
+        kind: "container",
+        containerItemId: found.id,
+        containerSlot: linkSlot,
+      });
+      setLinkItemId("");
+      setLinkSlot("");
+      setLinkingExisting(false);
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : "关联失败");
+    }
+  };
+
+  const openMove = () => {
+    setDestinationKey(
+      found.containerItemId
+        ? `container:${found.containerItemId}`
+        : `area:${area.id}`
+    );
+    setDestinationSlot(found.containerSlot ?? "");
+    setLocationError(null);
+    setMoving(true);
+  };
+
+  const handleMove = () => {
+    const [kind, id] = destinationKey.split(":");
+    if (!id) return;
+    setLocationError(null);
+    try {
+      const movedItem = kind === "container"
+        ? moveItem(found.id, {
+            kind: "container",
+            containerItemId: id,
+            containerSlot: destinationSlot,
+          })
+        : moveItem(found.id, { kind: "area", areaId: id });
+      setMoving(false);
+      navigate(`/area/${movedItem.areaId}/item/${movedItem.id}`, { replace: true });
+    } catch (error) {
+      setLocationError(error instanceof Error ? error.message : "移动失败");
     }
   };
 
@@ -99,6 +201,8 @@ export default function ItemDetailPage() {
   const hasGallery = Boolean(found.gallery?.length);
   const hasMediaColumn = Boolean(found.image || hasGallery || hasLocationVisual);
   const promoteLocation = !found.image && hasLocationVisual;
+  const locationPath = getItemLocationPath(areas, found.id);
+  const locationTrail = getItemLocationTrail(areas, found.id);
 
   // 储物空间内的物品按名称排序
   const sortedContents = found.contents
@@ -106,6 +210,8 @@ export default function ItemDetailPage() {
         a.name.localeCompare(b.name, "zh-CN")
       )
     : [];
+  const isStorageSpace =
+    found.category === "储物" || sortedContents.length > 0 || containedItems.length > 0;
 
   // 维护状态计算
   const maintenance = found.maintenanceCycle
@@ -119,7 +225,7 @@ export default function ItemDetailPage() {
   return (
     <PageLayout
       title={found.name}
-      subtitle={`${found.category} · ${area.name}`}
+      subtitle={`${found.category} · ${locationPath.join(" → ")}`}
     >
       {/* 面包屑 */}
       <nav className="mb-5 flex items-center gap-1 text-2xs text-ink/45">
@@ -130,13 +236,29 @@ export default function ItemDetailPage() {
         <Link to={`/area/${areaId}`} className="hover:text-clay-500">
           {area.name}
         </Link>
+        {container && (
+          <>
+            <ChevronRight size={12} />
+            <Link
+              to={`/area/${container.area.id}/item/${container.item.id}`}
+              className="hover:text-clay-500"
+            >
+              {container.item.name}
+            </Link>
+          </>
+        )}
         <ChevronRight size={12} />
         <span className="text-ink/70">{found.name}</span>
       </nav>
 
       {editing ? (
         <>
-          <ItemForm value={value} onChange={setValue} areaId={areaId} />
+          <ItemForm
+            value={value}
+            onChange={setValue}
+            areaId={areaId}
+            containedInName={container?.item.name}
+          />
           <div className="action-bar sticky bottom-0 z-20 -mb-5 mt-8 flex items-center gap-2 border-t border-line bg-paper/95 py-3 backdrop-blur-md sm:-mb-8 sm:justify-end">
             <button onClick={() => setEditing(false)} className="btn-secondary shrink-0">
               <X size={15} /> <span className="hidden sm:inline">取消</span>
@@ -226,6 +348,8 @@ export default function ItemDetailPage() {
                 <button
                   onClick={handleDelete}
                   className="btn-ghost text-ochre hover:bg-ochre/10"
+                  aria-label="删除物品"
+                  title="删除物品"
                 >
                   <Trash2 size={15} />
                 </button>
@@ -310,13 +434,111 @@ export default function ItemDetailPage() {
               </div>
             )}
 
-            {/* 内部物品清单（储物单元） */}
+            {/* 储物空间内的完整物品档案 */}
+            {isStorageSpace && <div className="mt-6 card overflow-hidden">
+              <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5">
+                <Box size={14} className="text-ochre" />
+                <h3 className="font-serif text-sm font-semibold text-ink">内部档案物品</h3>
+                <span className="text-2xs text-ink/45">{containedItems.length} 件</span>
+                <div className="ml-auto flex flex-wrap gap-1.5">
+                  <Link
+                    to={`/area/${area.id}/item/new?container=${encodeURIComponent(found.id)}`}
+                    className="btn-secondary"
+                  >
+                    <Plus size={13} /> 登记完整物品
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setLinkingExisting((open) => !open)}
+                    className="btn-ghost"
+                  >
+                    <Link2 size={13} /> 关联已有物品
+                  </button>
+                </div>
+              </div>
+
+              {linkingExisting && (
+                <div className="border-b border-line bg-clay-50/50 p-3">
+                  {linkCandidates.length > 0 ? (
+                    <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                      <select
+                        value={linkItemId}
+                        onChange={(event) => setLinkItemId(event.target.value)}
+                        className="field"
+                      >
+                        <option value="">选择已有物品</option>
+                        {linkCandidates.map(({ item, area: candidateArea }) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} · {candidateArea.name}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={linkSlot}
+                        onChange={(event) => setLinkSlot(event.target.value)}
+                        className="field"
+                        placeholder="容器内位置（可选）"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleLinkExisting}
+                        disabled={!linkItemId}
+                        className="btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        确认关联
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-ink/45">暂无其他可关联的正式物品。</p>
+                  )}
+                </div>
+              )}
+
+              {containedItems.length > 0 ? (
+                <ul className="divide-y divide-line">
+                  {containedItems.map((item) => (
+                    <li key={item.id}>
+                      <Link
+                        to={`/area/${item.areaId}/item/${item.id}`}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-clay-50/60"
+                      >
+                        {item.image ? (
+                          <SafeImage
+                            category={item.category}
+                            src={item.image}
+                            alt={item.name}
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-clay-50 text-ink/35">
+                            <Box size={16} />
+                          </span>
+                        )}
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium text-ink">{item.name}</span>
+                          <span className="block truncate text-2xs text-ink/45">
+                            {[item.brand, item.containerSlot].filter(Boolean).join(" · ") || item.category}
+                          </span>
+                        </span>
+                        <ChevronRight size={14} className="shrink-0 text-ink/30" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="px-4 py-4 text-center text-xs text-ink/40">
+                  暂无完整物品，可新建档案或关联已有物品。
+                </p>
+              )}
+            </div>}
+
+            {/* 内部快捷清单（储物单元） */}
             {sortedContents.length > 0 && (
               <div className="mt-6 card overflow-hidden">
                 <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
                   <Box size={14} className="text-ochre" />
                   <h3 className="font-serif text-sm font-semibold text-ink">
-                    内部物品清单
+                    内部快捷清单
                   </h3>
                   <span className="ml-auto text-2xs text-ink/45">
                     共 {sortedContents.length} 项
@@ -345,13 +567,98 @@ export default function ItemDetailPage() {
                   ))}
                 </ul>
                 <p className="border-t border-line px-4 py-2 text-2xs text-ink/40">
-                  清单内的物品名称与备注同样参与关键词检索。
+                  适合不需要照片、品牌和维护档案的小物品；名称与备注同样参与关键词检索。
                 </p>
               </div>
             )}
 
-            {/* 区域图定位 */}
-            {!promoteLocation && (
+            {/* 统一位置关系与移动入口 */}
+            <div className="mt-6 card overflow-hidden">
+              <div className="flex items-center gap-1.5 border-b border-line px-4 py-2.5">
+                <Move size={14} className="text-ochre" />
+                <h3 className="font-serif text-sm font-semibold text-ink">当前位置</h3>
+                <button type="button" onClick={openMove} className="btn-ghost ml-auto">
+                  更改位置
+                </button>
+              </div>
+              <div className="px-4 py-3">
+                <nav
+                  aria-label={`${found.name}的当前位置`}
+                  className="flex flex-wrap items-center gap-1 text-sm text-ink/75"
+                >
+                  {locationTrail.map((segment, index) => (
+                    <Fragment key={`${segment.kind}:${segment.id}`}>
+                      {index > 0 && <ChevronRight size={13} className="text-ink/30" />}
+                      <Link
+                        to={segment.kind === "area"
+                          ? `/area/${segment.id}`
+                          : `/area/${segment.areaId}/item/${segment.id}`}
+                        className="font-medium text-clay-600 underline-offset-2 hover:underline"
+                      >
+                        {segment.name}
+                      </Link>
+                    </Fragment>
+                  ))}
+                  {found.containerSlot && (
+                    <span className="ml-1 text-ink/55">· {found.containerSlot}</span>
+                  )}
+                </nav>
+                {found.containerItemId && (
+                  <p className="mt-1 text-2xs text-ink/45">区域位置继承自储物空间，不重复标注坐标。</p>
+                )}
+              </div>
+              {moving && (
+                <div className="border-t border-line bg-clay-50/50 p-3">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <select
+                      value={destinationKey}
+                      onChange={(event) => {
+                        setDestinationKey(event.target.value);
+                        setDestinationSlot("");
+                      }}
+                      className="field"
+                    >
+                      <optgroup label="直接放在区域内">
+                        {areas.map((candidateArea) => (
+                          <option key={candidateArea.id} value={`area:${candidateArea.id}`}>
+                            {candidateArea.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      {containerCandidates.length > 0 && (
+                        <optgroup label="收纳于正式物品">
+                          {containerCandidates.map(({ item, area: candidateArea }) => (
+                            <option key={item.id} value={`container:${item.id}`}>
+                              {candidateArea.name} · {item.name}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    {destinationKey.startsWith("container:") ? (
+                      <input
+                        value={destinationSlot}
+                        onChange={(event) => setDestinationSlot(event.target.value)}
+                        className="field"
+                        placeholder="容器内位置（可选）"
+                      />
+                    ) : (
+                      <p className="self-center text-2xs text-ink/45">移动后可重新标注区域图坐标。</p>
+                    )}
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => setMoving(false)} className="btn-ghost">取消</button>
+                      <button type="button" onClick={handleMove} className="btn-primary">确认移动</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {locationError && (
+                <p className="border-t border-line px-4 py-2 text-xs text-ochre">{locationError}</p>
+              )}
+            </div>
+
+            {/* 直接位于区域内时才显示区域图定位 */}
+            {!found.containerItemId && !promoteLocation && (
               <LocationCard item={found} image={locationImage} onEdit={() => setEditing(true)} />
             )}
           </div>

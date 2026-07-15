@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { MapPin } from "lucide-react";
+import { Box, MapPin } from "lucide-react";
 import type { Item } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,7 @@ import SafeImage from "@/components/SafeImage";
 interface ItemCardProps {
   item: Item;
   areaName?: string;
+  containerName?: string;
   /** 是否高亮（检索命中态） */
   highlighted?: boolean;
   onClick?: () => void;
@@ -16,6 +17,7 @@ interface ItemCardProps {
 export default function ItemCard({
   item,
   areaName,
+  containerName,
   highlighted,
   onClick,
 }: ItemCardProps) {
@@ -74,6 +76,12 @@ export default function ItemCard({
         </div>
         {item.spec && (
           <p className="line-clamp-1 text-2xs text-ink/40">{item.spec}</p>
+        )}
+        {containerName && (
+          <p className="mt-0.5 inline-flex items-center gap-1 text-2xs text-ochre">
+            <Box size={11} /> 收纳于 {containerName}
+            {item.containerSlot ? ` · ${item.containerSlot}` : ""}
+          </p>
         )}
       </div>
     </article>

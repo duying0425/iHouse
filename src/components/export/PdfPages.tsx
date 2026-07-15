@@ -5,6 +5,7 @@ import { CATEGORY_COLOR } from "@/types";
 import { countItems } from "@/data/seed";
 import SafeImage from "@/components/SafeImage";
 import { cycleLabel, getMaintenanceStatus } from "@/utils/maintenance";
+import { getItemLocationPath } from "@/utils/itemLocation";
 import type { ExportPageDesc, ItemRef } from "@/components/export/exportModel";
 
 export const A4_PAGE_W = 794;
@@ -294,8 +295,12 @@ export const AreaContinuationPage = forwardRef<HTMLDivElement, {
 ));
 AreaContinuationPage.displayName = "AreaContinuationPage";
 
-function MetaRows({ item }: { item: Item }) {
+function MetaRows({ home, item }: { home: Home; item: Item }) {
   const maintenance = item.maintenanceCycle ? getMaintenanceStatus(item) : null;
+  const locationPath = getItemLocationPath(home.areas, item.id);
+  const containerLocation = item.containerItemId
+    ? [...locationPath.slice(1), item.containerSlot].filter(Boolean).join(" → ")
+    : undefined;
   const rows = [
     ["品牌", item.brand],
     ["规格", item.spec],
@@ -303,6 +308,7 @@ function MetaRows({ item }: { item: Item }) {
     ["价格", item.price != null ? `¥ ${item.price.toLocaleString()}` : undefined],
     ["维护周期", item.maintenanceCycle ? cycleLabel(item.maintenanceCycle) : undefined],
     ["维护状态", maintenance?.label],
+    ["收纳于", containerLocation],
     ["备注", item.remark],
   ];
   return (
@@ -346,7 +352,7 @@ export const ItemPage = forwardRef<HTMLDivElement, {
             </div>
           )}
           <div>
-            <MetaRows item={item} />
+            <MetaRows home={home} item={item} />
             {hasPrimary && hasLocation && locationImage && (
               <div className="mt-4 rounded border border-line bg-paper p-2.5">
                 <p className="mb-1.5 text-[9px] uppercase tracking-wider text-ink/45">在区域图中的位置</p>
@@ -517,6 +523,7 @@ function CompactItemCard({ home, itemRef }: { home: Home; itemRef: ItemRef }) {
   const found = itemForRef(home, itemRef);
   if (!found) return null;
   const { area, item } = found;
+  const locationPath = getItemLocationPath(home.areas, item.id);
   const hasImage = Boolean(item.image);
   return (
     <article className={`overflow-hidden rounded border border-line bg-paper ${hasImage ? "col-span-2 flex min-h-[126px]" : "min-h-[126px] p-3"}`}>
@@ -528,7 +535,7 @@ function CompactItemCard({ home, itemRef }: { home: Home; itemRef: ItemRef }) {
       <div className={hasImage ? "min-w-0 flex-1 p-3" : ""}>
         <div className="flex items-center gap-1.5 text-[8px] uppercase tracking-wider text-ink/45">
           <span className="h-1.5 w-1.5 rounded-full" style={{ background: CATEGORY_COLOR[item.category] }} />
-          <span>{item.category}</span><span>·</span><span>{area.name}</span>
+          <span>{item.category}</span><span>·</span><span>{locationPath.join(" → ") || area.name}</span>
           <span className="ml-auto">#{itemRef.itemNumber}</span>
         </div>
         <h3 className="mt-1 font-serif text-sm font-semibold leading-tight text-ink">{item.name}</h3>
