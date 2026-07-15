@@ -343,6 +343,24 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
           />
         </Field>
 
+        <Field label="别名 / 标签">
+          <input
+            value={value.tags}
+            onChange={(e) => set("tags", e.target.value)}
+            placeholder="用逗号或空格分隔多个，例如：挂烫机, 熨斗"
+            className="field"
+          />
+          {value.tags.trim() && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5 transition-all">
+              {value.tags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean).map((t, idx) => (
+                <span key={idx} className="chip bg-clay-50/50 text-clay-700 border-clay-200/60">
+                  {t}
+                </span>
+              ))}
+            </div>
+          )}
+        </Field>
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
           <Field label="分类">
             <select

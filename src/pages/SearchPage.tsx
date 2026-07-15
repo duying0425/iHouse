@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpDown, MapPin, Plus, Search as SearchIcon, X } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
@@ -22,6 +22,12 @@ export default function SearchPage() {
   const [brands, setBrands] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [activeId, setActiveId] = useState<string | undefined>();
+
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
 
   const brandList = useMemo(() => allBrands(), [allBrands]);
 
@@ -69,6 +75,7 @@ export default function SearchPage() {
             className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/35"
           />
           <input
+            ref={inputRef}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
             placeholder="搜索物品名称、品牌、规格、备注、储物单元内部物品……"

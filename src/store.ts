@@ -142,12 +142,14 @@ export const useHomeStore = create<HomeState>()(
                 c.name,
                 c.remark,
               ]);
+              const tagParts = item.tags ?? [];
               const hay = [
                 item.name,
                 item.brand,
                 item.spec,
                 item.remark,
                 item.usage,
+                ...tagParts,
                 ...getItemLocationPath(areas, item.id),
                 ...contentParts,
               ]

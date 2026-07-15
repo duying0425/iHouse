@@ -303,6 +303,7 @@ function MetaRows({ home, item }: { home: Home; item: Item }) {
     : undefined;
   const rows = [
     ["品牌", item.brand],
+    ["别名 / 标签", item.tags && item.tags.length > 0 ? item.tags.join("、") : undefined],
     ["规格", item.spec],
     ["购入日期", item.purchaseDate],
     ["价格", item.price != null ? `¥ ${item.price.toLocaleString()}` : undefined],

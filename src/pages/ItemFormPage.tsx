@@ -54,6 +54,7 @@ export default function ItemFormPage() {
         name: value.name.trim(),
         category: value.category,
         brand: value.brand.trim() || undefined,
+        tags: value.tags ? value.tags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean) : undefined,
         spec: value.spec.trim() || undefined,
         purchaseDate: value.purchaseDate || undefined,
         price: value.price ? Number(value.price) : undefined,

@@ -4,6 +4,7 @@ export interface ItemFormValue {
   name: string;
   category: Category;
   brand: string;
+  tags: string;
   spec: string;
   purchaseDate: string;
   price: string;
@@ -23,6 +24,7 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     name: item?.name ?? "",
     category: (item?.category as Category) ?? "家电",
     brand: item?.brand ?? "",
+    tags: item?.tags?.join(", ") ?? "",
     spec: item?.spec ?? "",
     purchaseDate: item?.purchaseDate ?? "",
     price: item?.price != null ? String(item.price) : "",

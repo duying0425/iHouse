@@ -51,6 +51,7 @@ export interface Item {
   name: string;
   category: Category;
   brand?: string;
+  tags?: string[];
   spec?: string;
   purchaseDate?: string; // YYYY-MM-DD
   price?: number;

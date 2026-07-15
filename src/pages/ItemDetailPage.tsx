@@ -119,6 +119,7 @@ export default function ItemDetailPage() {
       name: value.name.trim(),
       category: value.category,
       brand: value.brand.trim() || undefined,
+      tags: value.tags ? value.tags.split(/[,，\s]+/).map(t => t.trim()).filter(Boolean) : undefined,
       spec: value.spec.trim() || undefined,
       purchaseDate: value.purchaseDate || undefined,
       price: value.price ? Number(value.price) : undefined,
@@ -332,6 +333,15 @@ export default function ItemDetailPage() {
                 {found.brand && (
                   <p className="mt-1 text-sm text-ink/55">{found.brand}</p>
                 )}
+                {found.tags && found.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {found.tags.map((tag) => (
+                      <span key={tag} className="chip bg-clay-50/50 text-clay-700 border-clay-200/60">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {/* 维护状态徽标 */}
                 {maintenance && (
                   <MaintenanceBadge
@@ -387,6 +397,17 @@ export default function ItemDetailPage() {
             {/* 信息表 */}
             <dl className="mt-6 divide-y divide-line border-y border-line">
               <InfoRow label="规格" value={found.spec} />
+              <InfoRow label="别名 / 标签">
+                {found.tags && found.tags.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {found.tags.map((tag) => (
+                      <span key={tag} className="chip bg-clay-50/50 text-clay-700 border-clay-200/60">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </InfoRow>
               <InfoRow label="分类" value={found.category} />
               <InfoRow label="品牌" value={found.brand} />
               <InfoRow label="购入日期" value={found.purchaseDate} />
@@ -719,14 +740,14 @@ function LocationCard({ item, image, onEdit }: { item: Item; image?: AreaImage; 
   );
 }
 
-function InfoRow({ label, value }: { label: string; value?: string }) {
+function InfoRow({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-4 py-2.5">
       <dt className="w-20 shrink-0 text-2xs uppercase tracking-wider text-ink/45">
         {label}
       </dt>
       <dd className="flex-1 text-sm text-ink/80">
-        {value || <span className="text-ink/30">—</span>}
+        {children || value || <span className="text-ink/30">—</span>}
       </dd>
     </div>
   );
