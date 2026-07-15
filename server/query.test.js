@@ -367,3 +367,67 @@ describe("listLocations", () => {
     expect(listLocations(null).count).toBe(0);
   });
 });
+
+describe("深度嵌套容器场景", () => {
+  function deepNestedHome() {
+    const home = structuredClone(HOME);
+    home.areas[0].items.push(
+      {
+        id: "item-wardrobe",
+        areaId: "area-living",
+        name: "衣柜",
+        category: "家具",
+        image: "/api/images/wardrobe.png",
+      },
+      {
+        id: "item-box",
+        areaId: "area-living",
+        name: "收纳箱",
+        category: "储物",
+        image: "/api/images/box.png",
+        containerItemId: "item-wardrobe",
+      },
+      {
+        id: "item-pouch",
+        areaId: "area-living",
+        name: "小袋",
+        category: "储物",
+        image: "/api/images/pouch.png",
+        containerItemId: "item-box",
+        containerSlot: "左侧口袋",
+      }
+    );
+    return home;
+  }
+
+  it("containerContext 返回完整 3 层容器名路径", () => {
+    const r = getItemById(deepNestedHome(), "item-pouch");
+    expect(r.locationPath).toEqual(["客厅", "衣柜", "收纳箱"]);
+    expect(r.container).toEqual({ id: "item-box", name: "收纳箱" });
+  });
+
+  it("searchItems 关键词命中 containerSlot", () => {
+    const r = searchItems(deepNestedHome(), { q: "左侧口袋" });
+    expect(r.count).toBe(1);
+    expect(r.items[0].id).toBe("item-pouch");
+  });
+
+  it("listLocations 返回深层物品的完整位置路径", () => {
+    const r = listLocations(deepNestedHome());
+    const pouch = r.locations.find((l) => l.itemId === "item-pouch");
+    expect(pouch).toMatchObject({
+      containerItemId: "item-box",
+      containerName: "收纳箱",
+      containerSlot: "左侧口袋",
+      locationPath: ["客厅", "衣柜", "收纳箱"],
+    });
+  });
+
+  it("searchItems 通过祖先容器名称检索到深层物品", () => {
+    const r = searchItems(deepNestedHome(), { q: "衣柜" });
+    const ids = r.items.map((entry) => entry.id);
+    expect(ids).toContain("item-wardrobe");
+    expect(ids).toContain("item-box");
+    expect(ids).toContain("item-pouch");
+  });
+});
