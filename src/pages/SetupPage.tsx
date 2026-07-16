@@ -315,7 +315,7 @@ export default function SetupPage() {
                 />
               )}
               <p className="mt-3 text-2xs text-ink/45">
-                {boundsEdit
+                {editMode
                   ? "编辑区域范围模式：拖拽矩形主体移动整体，拖拽 8 个把手调整边角；无矩形的区域请在右侧点「画范围」。"
                   : isImageMode
                   ? "拖拽图上的序号锚点到对应区域位置；锚点会自动保存。点「编辑区域范围」可为每个区域画出覆盖矩形。"
