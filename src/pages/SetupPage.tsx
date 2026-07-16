@@ -445,7 +445,7 @@ export default function SetupPage() {
                               title="清除该区域在户型图上的覆盖范围"
                               aria-label="清除范围"
                             >
-                              <Trash size={13} />
+                              <Trash2 size={13} />
                             </button>
                           </div>
                         ) : (
