@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock, Camera, LoaderCircle, Sparkles } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
 import { CATEGORIES, type Category, type StorageEntry } from "@/types";
@@ -18,9 +18,11 @@ interface ItemFormProps {
   areaId: string;
   /** 收纳于正式物品时，不再直接标注区域图坐标。 */
   containedInName?: string;
+  /** 新建物品时展示「放置位置」选择器，可直接收纳到本区域储物单元。 */
+  isNew?: boolean;
 }
 
-export default function ItemForm({ value, onChange, areaId, containedInName }: ItemFormProps) {
+export default function ItemForm({ value, onChange, areaId, containedInName, isNew }: ItemFormProps) {
   const { areas } = useHomeStore();
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -37,20 +39,43 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
   const area = areas.find((a) => a.id === areaId);
   const images = area?.images ?? [];
 
+  // 新建物品时可在表单内直接选择收纳到本区域的储物单元
+  const containerCandidates = useMemo(() => {
+    if (!isNew || !area) return [];
+    return area.items.filter(
+      (item) =>
+        item.category === "储物" ||
+        (item.contents?.length ?? 0) > 0 ||
+        areas.some((a) => a.items.some((i) => i.containerItemId === item.id))
+    );
+  }, [isNew, area, areas]);
+
+  const selectedContainerItem =
+    isNew && value.containerItemId
+      ? area?.items.find((i) => i.id === value.containerItemId)
+      : undefined;
+  // 是否收纳于储物单元（新建时由表单选择，编辑时由 containedInName 决定）
+  const effectiveContained = isNew
+    ? Boolean(value.containerItemId)
+    : Boolean(containedInName);
+  const effectiveContainedName = isNew
+    ? selectedContainerItem?.name
+    : containedInName;
+
   // 始终持有最新 value，避免粘贴监听器等闭包用到过期值（导致覆盖已填字段）
   const valueRef = useRef(value);
   valueRef.current = value;
 
   // 若 value.areaImageId 不在该区域的图片里（或为空），自动选第一张
   useEffect(() => {
-    if (containedInName) return;
+    if (effectiveContained) return;
     if (images.length === 0) return;
     const valid = images.some((img) => img.id === value.areaImageId);
     if (!valid && value.areaImageId !== images[0].id) {
       onChange({ ...valueRef.current, areaImageId: images[0].id });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [images.length, value.areaImageId, containedInName]);
+  }, [images.length, value.areaImageId, effectiveContained]);
 
   const set = <K extends keyof ItemFormValue>(k: K, v: ItemFormValue[K]) =>
     onChange({ ...valueRef.current, [k]: v });
@@ -678,18 +703,68 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
           )}
         </div>
 
-        {/* 区域图位置点选 */}
-        {containedInName ? (
+        {/* 放置位置选择（新建时可直接收纳到储物单元） */}
+        {isNew && (
+          <div className="card p-4">
+            <div className="mb-2 flex items-center gap-1.5">
+              <Box size={14} className="text-ochre" />
+              <h4 className="font-serif text-sm font-semibold text-ink">放置位置</h4>
+            </div>
+            <select
+              value={value.containerItemId ?? ""}
+              onChange={(e) => {
+                const id = e.target.value || null;
+                onChange({
+                  ...valueRef.current,
+                  containerItemId: id,
+                  containerSlot: "",
+                  areaImagePos: id ? null : valueRef.current.areaImagePos,
+                });
+              }}
+              className="field"
+            >
+              <option value="">直接放在区域内</option>
+              {containerCandidates.map((c) => (
+                <option key={c.id} value={c.id}>
+                  收纳到：{c.name}
+                </option>
+              ))}
+            </select>
+            {value.containerItemId && (
+              <input
+                value={value.containerSlot}
+                onChange={(e) => set("containerSlot", e.target.value)}
+                placeholder="容器内位置（可选，如：右侧下层）"
+                className="field mt-2"
+              />
+            )}
+            {containerCandidates.length === 0 ? (
+              <p className="mt-1.5 text-2xs text-ink/45">
+                该区域暂无储物单元，将直接放在区域内。
+              </p>
+            ) : value.containerItemId ? (
+              <p className="mt-1.5 text-2xs text-ink/45">
+                该物品的位置由储物空间继承，无需在区域图上重复标注。
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {/* 编辑模式：收纳于储物空间时展示说明 */}
+        {!isNew && effectiveContained && (
           <div className="card flex items-start gap-3 p-4">
             <Box size={17} className="mt-0.5 shrink-0 text-ochre" />
             <div>
-              <h4 className="font-serif text-sm font-semibold text-ink">收纳于 {containedInName}</h4>
+              <h4 className="font-serif text-sm font-semibold text-ink">收纳于 {effectiveContainedName}</h4>
               <p className="mt-1 text-2xs leading-relaxed text-ink/50">
                 该物品的位置由储物空间继承，无需在区域图上重复标注。保存后可在详情页更改位置或移出储物空间。
               </p>
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* 区域图位置点选（未收纳于储物单元时） */}
+        {!effectiveContained && (
           <div className="card p-4">
             <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <MapPin size={14} className="text-ochre" />

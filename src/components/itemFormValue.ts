@@ -13,6 +13,9 @@ export interface ItemFormValue {
   gallery: string[];
   areaImageId: string | null;
   areaImagePos: AnchorPosition | null;
+  /** 新建时可在表单内直接选择收纳到本区域的储物单元 */
+  containerItemId: string | null;
+  containerSlot: string;
   contents: StorageEntry[];
   usage: string;
   maintenanceCycle: string;
@@ -33,6 +36,8 @@ export function itemToFormValue(item?: Partial<Item>): ItemFormValue {
     gallery: item?.gallery?.map((image) => image) ?? [],
     areaImageId: item?.areaImageId ?? null,
     areaImagePos: item?.areaImagePos ?? null,
+    containerItemId: item?.containerItemId ?? null,
+    containerSlot: item?.containerSlot ?? "",
     contents: item?.contents?.map((content) => ({ ...content })) ?? [],
     usage: item?.usage ?? "",
     maintenanceCycle: item?.maintenanceCycle != null ? String(item.maintenanceCycle) : "",

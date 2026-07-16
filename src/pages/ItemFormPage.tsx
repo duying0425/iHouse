@@ -17,10 +17,18 @@ export default function ItemFormPage() {
 
   const area = areas.find((a) => a.id === areaId);
   const requestedContainerId = searchParams.get("container") ?? undefined;
-  const container = area?.items.find((item) => item.id === requestedContainerId);
-  const [value, setValue] = useState<ItemFormValue>(itemToFormValue());
+  const requestedContainer = area?.items.find((item) => item.id === requestedContainerId);
+  const [value, setValue] = useState<ItemFormValue>(() => ({
+    ...itemToFormValue(),
+    containerItemId: requestedContainer ? (requestedContainerId ?? null) : null,
+  }));
   // 防止多次点击重复保存
   const [saving, setSaving] = useState(false);
+
+  // 表单内选择的储物单元（用于副标题与保存）
+  const selectedContainer = value.containerItemId
+    ? area?.items.find((i) => i.id === value.containerItemId)
+    : undefined;
 
   if (!area) {
     return (
@@ -50,6 +58,7 @@ export default function ItemFormPage() {
     }
     setSaving(true);
     try {
+      const containerId = value.containerItemId || undefined;
       const created = addItem(areaId, {
         name: value.name.trim(),
         category: value.category,
@@ -63,9 +72,10 @@ export default function ItemFormPage() {
           value.image ||
           imageOf(value.name + " 产品图", "square"),
         gallery: value.gallery,
-        areaImageId: container ? undefined : value.areaImageId || undefined,
-        areaImagePos: container ? undefined : value.areaImagePos || undefined,
-        containerItemId: container?.id,
+        areaImageId: containerId ? undefined : value.areaImageId || undefined,
+        areaImagePos: containerId ? undefined : value.areaImagePos || undefined,
+        containerItemId: containerId,
+        containerSlot: containerId ? (value.containerSlot.trim() || undefined) : undefined,
         contents: normalizeContents(value.contents),
         usage: value.usage.trim() || undefined,
         maintenanceCycle: value.maintenanceCycle
@@ -84,8 +94,8 @@ export default function ItemFormPage() {
   return (
     <PageLayout
       title={`录入 · ${area.name}`}
-      subtitle={container
-        ? `在「${container.name}」内登记一件完整物品`
+      subtitle={selectedContainer
+        ? `在「${selectedContainer.name}」内登记一件完整物品`
         : `为 ${area.name} 添加一件物品或设施`}
     >
       <nav className="mb-5 flex items-center gap-1 text-2xs text-ink/45">
@@ -100,7 +110,7 @@ export default function ItemFormPage() {
         <span className="text-ink/70">录入物品</span>
       </nav>
 
-      {requestedContainerId && !container && (
+      {requestedContainerId && !requestedContainer && (
         <div className="mb-4 rounded border border-ochre/30 bg-ochre/5 px-3 py-2 text-xs text-ochre">
           指定的储物空间不存在，将作为区域内独立物品登记。
         </div>
@@ -110,7 +120,7 @@ export default function ItemFormPage() {
         value={value}
         onChange={setValue}
         areaId={areaId}
-        containedInName={container?.name}
+        isNew
       />
 
       <div className="action-bar sticky bottom-0 z-20 -mb-5 mt-8 flex items-center gap-2 border-t border-line bg-paper/95 py-3 backdrop-blur-md sm:-mb-8 sm:justify-end">
