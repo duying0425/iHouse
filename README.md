@@ -2,7 +2,7 @@
 
 居家设施与物品管理应用：导入户型图 → 划分区域 → 每个区域可有多张图（总图/设施图/某面墙等）→ 在区域图上标注每件物品的具体位置 → 导出 PDF 打印归档。
 
-数据存储在服务器（SQLite），支持**多设备共享同一份数据**。
+数据存储在服务器（SQLite），支持**多设备共享同一份数据**；物品拍照后可按需点击 **AI 识别**，自动补齐空白档案字段。
 
 ## 文档
 
@@ -10,6 +10,7 @@
 
 - [PRD.md](./docs/PRD.md) — 产品需求文档：原始设想、核心场景、功能清单、数据模型
 - [architecture.md](./docs/architecture.md) — 技术架构：前后端结构、存储方案、PDF 导出两方案对比、部署架构
+- [deployment.md](./docs/deployment.md) — 服务器部署手册：AI 配置、Docker/NAS、HTTPS、备份恢复、升级与排障
 - [changelog.md](./docs/changelog.md) — 迭代记录：功能演进时间线
 
 ## 功能特性
@@ -18,14 +19,15 @@
 - **区域多图**：每个区域支持上传一张或多张图（区域总图、设施图、某面墙等），可编辑标签；多选上传自动保持顺序。
 - **物品位置标注**：录入物品时直接在区域图上点选位置，红色标记点直观展示物品所处位置；物品详情、区域页、PDF 导出均会显示标注。
 - **物品档案与收纳关系**：完整物品支持品牌、照片、维护等全部档案字段，也可收纳于衣柜、橱柜等另一件正式物品；储物空间仍保留适合小物品的快捷清单。物品可关联、移出或跨区域移动，正式档案始终只有一份。
+- **AI 图片识别**：拍照或上传主图后手动触发，识别名称、项目分类、品牌、标签、规格、估价与备注；只填空字段，不覆盖用户内容，服务端校验模型 JSON 并保护 API Key。
 - **维护提醒**：为定期维护设备（净水器滤芯、空调清洗、热水器镁棒等）设置维护周期与上次维护日期，首页自动汇总「已过期 / 即将到期 / 待首次维护」列表，详情页显示状态徽标与高亮提醒。
 - **图片压缩**：上传/粘贴时自动压缩（canvas 缩放 + JPEG），避免存储爆满。
 - **多设备共享**：数据存服务器 SQLite，所有设备访问同一份数据；本地 IndexedDB 作缓存，离线仍可用，联网自动同步。
-- **数据备份**：一键导出 JSON 备份，可跨设备/环境导入恢复。
+- **数据备份**：按房屋一键导出完整 ZIP（`home.json` + 引用图片 + manifest），可跨设备/环境导入恢复；完整实例可冷备份 `server/data/`。
 - **PDF 导出（小册子 / 详细档案）**：默认把紧凑 A5 阅读页自动拼成 A4 横向双面折页，也可输出 A4 纵向详细档案；长说明、清单和所有图片自动续页。打印前会等待字体与图片完成载入，文字保持矢量清晰。
 - **检索**：按关键词、分类、品牌、区域筛选物品。
 - **结构化查询 API**：提供 `/api/query/*` 端点（summary/areas/items/locations），按区域/分类/品牌/关键词过滤，为未来接入 AI 智能化提供数据访问层。
-- **单元测试与集成测试**：vitest 覆盖前后端关键模块与完整 HTTP 链路——前端工具函数（图片压缩、上传、维护、收纳移动、迁移规范化等）、后端查询与鉴权、端到端 API 集成测试，共 191 个测试。
+- **单元测试与集成测试**：vitest 覆盖前后端关键模块与完整 HTTP 链路，包括 AI 输出规范化、空字段回填、查询、鉴权、备份与端到端 API，共 200+ 个测试。
 
 ## 技术栈
 
@@ -38,11 +40,10 @@
 | 工具 | 版本 | 说明 |
 |------|------|------|
 | Node.js | ≥ 20（推荐 20.x） | better-sqlite3 为原生模块，需匹配 Node ABI；Vite 6 要求 Node 18+ |
-| pnpm | 9.x | `pnpm-lock.yaml` 为 lockfileVersion 9.0。**勿用 pnpm 11+**，它要求 Node ≥22.13，与 Node 20 冲突 |
-| npm | ≥ 10 | 后端依赖用 npm 安装（`server/` 无 lockfile，跟随系统 npm） |
+| pnpm | 10.18.2（推荐） | 与 Dockerfile 固定版本一致；使用仓库根目录 `pnpm-lock.yaml` |
+| npm | ≥ 10 | 后端依赖使用 `server/package-lock.json`，部署/CI 推荐 `npm ci` |
 
-> **包管理器说明**：前端用 pnpm（有 `pnpm-lock.yaml`），后端用 npm（`server/` 无 lockfile）。混用是项目约定，非疏漏。
-> 若已装新版 pnpm，可 `npm install -g pnpm@9` 降级；或改用 Node 22+ 后再用 pnpm 11。
+> **包管理器说明**：前端用 pnpm，后端用 npm；两边均有各自 lockfile。混用是项目约定，非疏漏。
 
 ## 快速开始（换环境接手）
 
@@ -50,7 +51,7 @@
 git clone https://github.com/duying0425/iHouse.git
 cd iHouse
 pnpm install            # 前端依赖
-cd server && npm install && cd ..   # 后端依赖
+cd server && npm ci && cd ..        # 后端依赖
 # 启动后端（终端1）
 cd server && node index.js
 # 启动前端（终端2）
@@ -59,7 +60,7 @@ pnpm dev
 
 前端 http://localhost:5173/ ，API 自动代理到后端 3000 端口。
 
-> 数据恢复：若之前导出过 JSON 备份，进入「设置 → 数据维护 → 导入备份」即可恢复；或直接在原浏览器打开，IndexedDB 缓存会自动同步到新服务器。
+> 数据恢复：若之前导出过房屋 ZIP 备份，进入“户型设置 → 数据维护 → 导入 ZIP”即可恢复结构与图片；完整实例迁移请恢复 `server/data/`。
 
 ## 本地开发
 
@@ -70,7 +71,7 @@ pnpm dev
 pnpm install
 
 # 2. 安装后端依赖
-cd server && npm install && cd ..
+cd server && npm ci && cd ..
 
 # 3. 启动后端（默认 3000 端口）
 cd server && node index.js
@@ -87,11 +88,30 @@ pnpm dev
 |------|--------|------|
 | `PORT` | `3000` | 后端监听端口；改后需同步改 `vite.config.ts` 的 `proxy./api` 目标 |
 | `DATA_DIR` | `server/data` | SQLite 数据库目录，可指向持久化卷（Docker 部署用） |
+| `AI_API_BASE_URL` | 无 | AI 服务根地址，后端自动补全 `/v1/chat/completions` |
+| `AI_API_URL` | 无 | 可选的完整 Chat Completions 地址；设置后优先于 `AI_API_BASE_URL` |
+| `AI_API_KEY` | 无 | AI 服务密钥，仅后端读取，不会发送到浏览器 |
+| `AI_MODEL` | `openai/gpt-5.6-sol` | 图片识别模型 ID |
+| `AI_TIMEOUT_MS` | `60000` | 单次 AI 识别超时（5000-120000 毫秒） |
 
 ```bash
 # 示例：自定义端口和数据目录
 PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
 ```
+
+### AI 图片识别配置
+
+复制根目录的 `.env.example` 为 `.env`，填写服务地址和 Key 后重启后端：
+
+```bash
+AI_API_BASE_URL=https://your-new-api.example.com
+AI_API_KEY=your-api-key
+AI_MODEL=openai/gpt-5.6-sol
+```
+
+本地 `node server/index.js` 和 `docker compose up -d --build` 都会使用这组配置。录入或编辑物品时，先拍照/上传主图，再点击“AI 识别”；结果只填充空字段，已有内容不会被覆盖。价格来自 AI 估价区间的中值，原始区间会同时写入空白备注，保存前请人工核对。
+
+`.env` 同时被 `.gitignore` 与 `.dockerignore` 排除，真实 Key 不会提交到 Git 或进入镜像构建上下文。点击识别时对应主图会发送到所配置的 AI 服务；未点击时不会发送。生产部署的完整配置、HTTPS 与排障见 [服务器部署手册](./docs/deployment.md)。
 
 ## 后端 API
 
@@ -105,6 +125,7 @@ PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
 | GET | `/api/houses/:id/data` | 读取指定房屋数据（需登录及房屋权限） |
 | PUT | `/api/houses/:id/data` | 整体覆盖指定房屋数据（需登录及房屋权限） |
 | POST | `/api/upload` | 上传单张图片，返回 `/api/images/<hash>.<ext>` URL |
+| POST | `/api/ai/recognize-item` | 识别已上传的物品主图并返回建议字段（需登录及 AI 环境变量） |
 | GET | `/api/images/<file>` | 访问已上传的图片 |
 
 ### 结构化查询 API（为 AI 智能化预留）
@@ -126,7 +147,7 @@ PORT=8180 DATA_DIR=/var/lib/ihouse node server/index.js
 
 ```bash
 pnpm build      # 构建前端到 dist/
-cd server && npm install   # 安装后端依赖
+cd server && npm ci        # 安装后端依赖
 node server/index.js       # 启动服务（同时提供前端静态文件 + API）
 ```
 
@@ -134,67 +155,42 @@ node server/index.js       # 启动服务（同时提供前端静态文件 + API
 
 ## Docker / NAS 部署
 
-`Dockerfile` 和 `docker-compose.yml` 位于仓库根目录，使用本地源码构建（不在容器内 git clone）。
-
-**部署流程**（NAS / 任意装了 Docker 的服务器）：
+`Dockerfile` 和 `docker-compose.yml` 位于仓库根目录，使用本地源码构建。首次部署先创建生产 `.env`：
 
 ```bash
 git clone https://github.com/duying0425/iHouse.git
 cd iHouse
-docker compose up -d --build          # 首次构建约 3-5 分钟
+cp .env.example .env
+chmod 600 .env
+# 编辑 .env，填写 AI_API_BASE_URL / AI_API_KEY
+docker compose config --quiet
+docker compose up -d --build
 # 访问 http://<NAS_IP>:8180
 ```
 
-**更新流程**（手动拉取最新代码后重建）：
+更新前先备份 `server/data/`，再执行：
 
 ```bash
-git pull && docker compose build && docker compose up -d
+git pull --ff-only
+docker compose build --pull
+docker compose up -d
 ```
 
-数据持久化在 `./server/data`（已在 `.gitignore` / `.dockerignore` 中，`git pull` 不会影响数据）。
-
-```yaml
-# docker-compose.yml
-services:
-  ihouse:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ihouse:latest
-    container_name: ihouse
-    restart: unless-stopped
-    ports:
-      - "8180:3000"
-    volumes:
-      - ./server/data:/app/server/data
-    environment:
-      - TZ=Asia/Shanghai
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
-      interval: 30s
-      timeout: 5s
-      start_period: 10s
-      retries: 3
-```
-
-- 访问：`http://<NAS_IP>:8180`
-- 数据持久化：`./server/data` 目录（SQLite 数据库 + 图片文件），重建容器不丢失
-- 更新：`git pull` 拉最新代码后 `docker compose build && docker compose up -d`
+数据持久化在 `./server/data`，AI 配置由 Compose 从根目录 `.env` 注入。完整的端口调整、Synology、Nginx/Caddy HTTPS、备份恢复、回滚和故障排查步骤见 [服务器部署手册](./docs/deployment.md)。
 
 ### 将现有数据导入 NAS
 
-本地已录入的数据需要一并迁移到 NAS，包括 **SQLite 数据库** 和 **图片文件** 两部分（缺一不可）。
-
-> ⚠️ 仅导出 JSON 备份是不够的 — 图片已提取为独立文件存储在 `images/` 目录，不在 JSON 中。JSON 导入只会恢复结构数据，图片会丢失。
+迁移单套房屋时，推荐在“户型设置 → 数据维护”导出完整 ZIP，再在服务器上的目标房屋导入；ZIP 已包含该房屋引用的图片。迁移整个实例（含用户、成员关系和所有房屋）时，需要迁移完整 `server/data/`。
 
 **迁移步骤**：
 
-1. **打包本地数据**：将项目 `server/data/` 目录打包为 `data.zip`
+1. **停止旧服务**：避免复制 SQLite WAL 写入中的不一致状态
+2. **打包本地数据**：将项目 `server/data/` 目录打包为 `data.zip`
    - 内含 `home.db`（SQLite 数据库）和 `images/` 文件夹（所有图片文件）
-2. **上传到 NAS**：用 Synology File Station 将 `data.zip` 上传到仓库根目录（如 `/volume1/docker/ihouse/`）
-3. **解压**：解压到 `server/data/` 目录
+3. **上传到 NAS**：用 Synology File Station 将 `data.zip` 上传到仓库根目录（如 `/volume1/docker/ihouse/`）
+4. **解压**：解压到 `server/data/` 目录
    - 确认目录结构为 `/volume1/docker/ihouse/server/data/home.db` 和 `/volume1/docker/ihouse/server/data/images/`
-4. **启动容器**：`docker compose up -d --build`，容器会自动读取 `server/data/` 中的数据
+5. **启动容器**：`docker compose up -d --build`，容器会自动读取 `server/data/` 中的数据
 
 > 如果容器已在运行，需先 `docker compose down` → 替换 `server/data/` 目录内容 → 再 `docker compose up -d`。
 
@@ -204,7 +200,7 @@ services:
 - **本地缓存兜底**：浏览器 IndexedDB 缓存最新数据，服务器不可用时仍可离线使用，联网后自动同步（600ms 防抖）。
 - **图片压缩**：浏览器先压缩（户型图 ≤2000px、区域图 ≤1600px、物品图 ≤1200px，JPEG 0.82-0.85），上传后保存为图片文件，JSON 中记录 `/api/images/...` URL。
 - **旧数据迁移**：Home 文档带 `schemaVersion: 3`；加载旧 v1/v2 数据或 IndexedDB 缓存时自动规范化并升级，不需要修改 SQLite 表结构。
-- 在「户型设置 → 数据维护」可导出/导入 JSON 备份。
+- 在“户型设置 → 数据维护”可导出/导入当前房屋的完整 ZIP 备份（含图片）；账号和成员关系需通过整个 `server/data/` 冷备份保护。
 
 ## 项目结构
 
@@ -213,7 +209,7 @@ services:
 │   ├── components/       # 组件
 │   │   ├── FloorPlan.tsx         # 户型图 + 区域锚点
 │   │   ├── AreaImageCanvas.tsx   # 区域图 + 物品位置标注
-│   │   ├── ItemForm.tsx          # 物品录入（含粘贴上传、压缩、维护周期）
+│   │   ├── ItemForm.tsx          # 物品录入（含 AI 识别、上传、维护周期）
 │   │   ├── SafeImage.tsx         # 图片带占位/兜底
 │   │   ├── export/PdfPages.tsx   # PDF 各页组件（封面/户型/区域/物品）
 │   │   └── PrintExportRenderer.tsx # 原生打印导出（window.print）
@@ -225,6 +221,7 @@ services:
 │   │   ├── upload.ts             # 图片上传到服务器
 │   │   ├── maintenance.ts        # 维护状态计算（过期/即将到期/正常）
 │   │   ├── homeData.ts           # 房屋数据规范化（补齐残缺字段防白屏）
+│   │   ├── aiRecognition.ts      # AI 识别请求与仅空字段回填
 │   │   └── *.test.ts             # 单元测试
 │   └── types.ts          # 类型定义
 ├── server/               # 后端服务
@@ -232,10 +229,12 @@ services:
 │   ├── auth.js           # 鉴权模块（密码哈希 / token / 分享码 / 中间件）
 │   ├── utils.js          # 后端工具函数（Base64 提取、图片引用收集）
 │   ├── query.js          # 结构化查询纯函数（summary/areas/items/locations）
+│   ├── ai-recognition.js # AI 提示词、上游调用、输出规范化与图片安全校验
 │   ├── auth.test.js      # 鉴权单元测试（30 个用例）
 │   ├── api.test.js       # 端到端 API 集成测试（59 个用例，子进程+临时DB）
 │   └── package.json
-├── docs/                 # 文档（PRD / 架构 / 迭代记录）
+├── docs/                 # 文档（PRD / 架构 / 部署手册 / 迭代记录）
+├── .env.example          # AI 服务端配置模板（真实 .env 不提交）
 ├── Dockerfile            # Docker 多阶段构建（本地源码构建）
 ├── docker-compose.yml    # Docker Compose 部署配置
 ├── vitest.config.ts      # 单元测试配置

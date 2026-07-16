@@ -13,7 +13,7 @@ RUN apk add --no-cache python3 make g++
 # 固定 pnpm 版本：pnpm 11+ 需要 Node 22，本镜像为 Node 20
 RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 
-# 复制本地源码（根目录 .dockerignore 已排除 node_modules/dist/.git/server/data 等）
+# 复制本地源码（.dockerignore 已排除依赖、构建产物、数据目录和所有 .env 密钥文件）
 WORKDIR /repo
 COPY . .
 

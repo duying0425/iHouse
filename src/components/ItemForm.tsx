@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock, Camera } from "lucide-react";
+import { ClipboardPaste, ImagePlus, Layers, MapPin, Plus, Trash2, Wand2, ChevronDown, Box, CalendarClock, Camera, LoaderCircle, Sparkles } from "lucide-react";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
 import { CATEGORIES, type Category, type StorageEntry } from "@/types";
 import { imageOf } from "@/utils/image";
@@ -10,6 +10,7 @@ import { genId } from "@/data/seed";
 import { cn } from "@/lib/utils";
 import { MAINTENANCE_PRESETS, getMaintenanceStatus } from "@/utils/maintenance";
 import type { ItemFormValue } from "@/components/itemFormValue";
+import { applyRecognitionToEmptyFields, recognizeItemImage } from "@/utils/aiRecognition";
 
 interface ItemFormProps {
   value: ItemFormValue;
@@ -27,7 +28,11 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
   const galleryCameraRef = useRef<HTMLInputElement>(null);
   const [touched, setTouched] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
+  const [recognizing, setRecognizing] = useState(false);
+  const [aiNotice, setAiNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
+  // 新建时默认分类“家电”仍可由 AI 修正；已有档案或用户手选的分类绝不覆盖。
+  const categoryCanAutofillRef = useRef(!value.name.trim());
 
   const area = areas.find((a) => a.id === areaId);
   const images = area?.images ?? [];
@@ -87,7 +92,46 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
 
     // 异步上传到服务器，成功后存储服务器返回的 URL，失败则回退使用本地 Base64 兜底
     const finalUrl = await uploadImage(base64Url);
+    setAiNotice(null);
     set("image", finalUrl);
+  };
+
+  const handleAiRecognition = async () => {
+    const image = valueRef.current.image;
+    if (!image || recognizing) return;
+    setRecognizing(true);
+    setAiNotice(null);
+    try {
+      const recognition = await recognizeItemImage(image);
+      if (valueRef.current.image !== image) {
+        setAiNotice({ kind: "error", message: "识别期间图片已更换，请对新图片重新识别。" });
+        return;
+      }
+      // 请求期间用户可能继续输入，因此必须以响应到达时的最新表单值为准。
+      const applied = applyRecognitionToEmptyFields(
+        valueRef.current,
+        recognition,
+        categoryCanAutofillRef.current
+      );
+      categoryCanAutofillRef.current = false;
+      onChange(applied.value);
+      const confidence = recognition.confidence == null
+        ? ""
+        : `（置信度 ${Math.round(recognition.confidence * 100)}%）`;
+      setAiNotice({
+        kind: "success",
+        message: applied.filled.length > 0
+          ? `已填写：${applied.filled.join("、")}${confidence}。请核对后保存。`
+          : `识别完成${confidence}，没有需要自动填写的空字段。`,
+      });
+    } catch (error) {
+      setAiNotice({
+        kind: "error",
+        message: error instanceof Error ? error.message : "AI 识别失败，请稍后重试",
+      });
+    } finally {
+      setRecognizing(false);
+    }
   };
 
   // 全局粘贴：支持 Ctrl+V 直接粘贴剪贴板里的图片作为物品照片
@@ -168,6 +212,22 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
             >
               <Camera size={15} /> 拍照
             </button>
+            {value.image && (
+              <button
+                type="button"
+                onClick={handleAiRecognition}
+                disabled={recognizing}
+                className="btn-primary disabled:cursor-wait disabled:opacity-60"
+                title="识别图片并只填写当前为空的字段"
+              >
+                {recognizing ? (
+                  <LoaderCircle size={15} className="animate-spin" />
+                ) : (
+                  <Sparkles size={15} />
+                )}
+                {recognizing ? "识别中…" : "AI 识别"}
+              </button>
+            )}
             <button
               type="button"
               onClick={async () => {
@@ -214,7 +274,10 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
             {value.image && (
               <button
                 type="button"
-                onClick={() => set("image", "")}
+                onClick={() => {
+                  setAiNotice(null);
+                  set("image", "");
+                }}
                 className="btn-ghost text-ochre hover:bg-ochre/10"
               >
                 <Trash2 size={15} /> 移除主图
@@ -224,6 +287,19 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
               <span className="ml-auto text-2xs text-moss">{pasteHint}</span>
             )}
           </div>
+          {aiNotice && (
+            <div
+              aria-live="polite"
+              className={cn(
+                "border-t px-3 py-2 text-xs",
+                aiNotice.kind === "success"
+                  ? "border-moss/20 bg-moss/5 text-moss"
+                  : "border-ochre/20 bg-ochre/5 text-ochre"
+              )}
+            >
+              {aiNotice.message}
+            </div>
+          )}
           <input
             value={value.image.startsWith("data:") ? "" : value.image}
             onChange={(e) => set("image", e.target.value)}
@@ -365,7 +441,10 @@ export default function ItemForm({ value, onChange, areaId, containedInName }: I
           <Field label="分类">
             <select
               value={value.category}
-              onChange={(e) => set("category", e.target.value as Category)}
+              onChange={(e) => {
+                categoryCanAutofillRef.current = false;
+                set("category", e.target.value as Category);
+              }}
               className="field appearance-none"
             >
               {CATEGORIES.map((c) => (

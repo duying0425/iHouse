@@ -7,3 +7,9 @@ server/node_modules
 server/data
 *.log
 .DS_Store
+
+# 服务端密钥只由 Docker Compose 注入，禁止进入构建上下文或镜像层
+.env
+.env.*
+server/.env
+server/.env.*

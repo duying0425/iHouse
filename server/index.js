@@ -6,7 +6,13 @@ import { fileURLToPath } from "url";
 import crypto from "crypto";
 import JSZip from "jszip";
 import multer from "multer";
+import dotenv from "dotenv";
 import { extractBase64Images, collectImageRefs } from "./utils.js";
+import {
+  AiRecognitionError,
+  recognizeItemFromImage,
+  resolveImageDataUrl,
+} from "./ai-recognition.js";
 import {
   buildSummary,
   listAreas,
@@ -28,6 +34,10 @@ import {
 } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// 本地开发读取仓库根目录 .env；系统环境变量和 Docker environment 始终优先。
+dotenv.config({ path: path.join(__dirname, "..", ".env"), quiet: true });
+dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
 
 // 数据目录：可挂载为 volume 持久化
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
@@ -259,6 +269,32 @@ app.post("/api/upload", requireAuth, (req, res) => {
     }
   } else {
     return res.json({ url: image });
+  }
+});
+
+// 根据已上传的物品图片识别档案字段。API Key 仅在服务端读取，不下发到浏览器。
+app.post("/api/ai/recognize-item", requireAuth, async (req, res) => {
+  try {
+    const imageDataUrl = resolveImageDataUrl(req.body?.image, IMAGES_DIR);
+    const result = await recognizeItemFromImage(imageDataUrl);
+    return res.json({ ok: true, result });
+  } catch (error) {
+    if (error instanceof AiRecognitionError) {
+      if (error.status >= 500) {
+        console.error(`[AI recognition] ${error.code}: ${error.message}`);
+      }
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+    console.error("[AI recognition] 未预期错误:", error);
+    return res.status(500).json({
+      ok: false,
+      error: "AI 识别失败，请稍后重试",
+      code: "AI_RECOGNITION_FAILED",
+    });
   }
 });
 
