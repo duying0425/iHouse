@@ -14,7 +14,6 @@ import {
   RotateCcw,
   Save,
   Settings2,
-  Trash2,
   Upload,
   UploadCloud,
   X,
@@ -267,7 +266,15 @@ export default function SetupPage() {
                   <Camera size={15} /> 拍照
                 </button>
                 <button
-                  onClick={() => setBoundsEdit((v) => !v)}
+                  onClick={() => {
+                    setBoundsEdit((v) => {
+                      const next = !v;
+                      if (!next) {
+                        setHighlightAreaId(null);
+                      }
+                      return next;
+                    });
+                  }}
                   className={cn(
                     "btn-secondary",
                     boundsEdit && "bg-clay-500 text-cream hover:bg-clay-600"
@@ -416,52 +423,27 @@ export default function SetupPage() {
                         <span className="shrink-0 text-2xs text-ink/40">
                           {a.items.length} 件 · {a.images.length} 图
                         </span>
-                        {a.bounds ? (
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => {
-                                setBoundsEdit(true);
-                                setHighlightAreaId(a.id);
-                              }}
-                              className={cn(
-                                "shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors",
-                                highlightAreaId === a.id
-                                  ? "bg-moss text-cream"
-                                  : "text-moss hover:bg-moss/10"
-                              )}
-                              title="在图上高亮并编辑该范围"
-                              aria-label="编辑范围"
-                            >
-                              <Crop size={13} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`确定要清除区域「${a.name}」的选框范围吗？`)) {
-                                  updateAreaBounds(a.id, null);
-                                  if (highlightAreaId === a.id) setHighlightAreaId(null);
-                                }
-                              }}
-                              className="shrink-0 rounded px-1.5 py-0.5 text-2xs text-clay-600 hover:bg-clay-100 transition-colors"
-                              title="清除该区域在户型图上的覆盖范围"
-                              aria-label="清除范围"
-                            >
-                              <Trash2 size={13} />
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => {
+                        <button
+                          onClick={() => {
+                            if (!a.bounds) {
                               updateAreaBounds(a.id, makeDefaultBounds(a.floorPlanPos));
-                              setBoundsEdit(true);
-                              setHighlightAreaId(a.id);
-                            }}
-                            className="shrink-0 rounded px-1.5 py-0.5 text-2xs text-clay-600 hover:bg-clay-100 transition-colors"
-                            title="以锚点为中心创建覆盖范围矩形"
-                            aria-label="画范围"
-                          >
-                            <Crop size={13} />
-                          </button>
-                        )}
+                            }
+                            setBoundsEdit(true);
+                            setHighlightAreaId(a.id);
+                          }}
+                          className={cn(
+                            "shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors",
+                            highlightAreaId === a.id
+                              ? "bg-moss text-cream"
+                              : a.bounds
+                              ? "text-moss hover:bg-moss/10"
+                              : "text-clay-600 hover:bg-clay-100"
+                          )}
+                          title={a.bounds ? "在图上高亮并编辑该范围" : "以锚点为中心创建覆盖范围矩形"}
+                          aria-label={a.bounds ? "编辑范围" : "画范围"}
+                        >
+                          <Crop size={13} />
+                        </button>
                         <button
                           onClick={() => setExpandedId(expanded ? null : a.id)}
                           className={cn(
