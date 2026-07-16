@@ -42,6 +42,57 @@ describe("normalizeHomeData", () => {
     expect(home?.areas[0].floorPlanPos).toEqual({ x: 25, y: 40 });
   });
 
+  it("bounds 处于 0-100 边界时，锚点仍对齐到中心", () => {
+    const home = normalizeHomeData({
+      areas: [
+        {
+          id: "full",
+          floorPlanPos: { x: 12, y: 34 },
+          bounds: { x: 0, y: 0, w: 100, h: 100 },
+        },
+      ],
+    });
+    expect(home?.areas[0].floorPlanPos).toEqual({ x: 50, y: 50 });
+  });
+
+  it("bounds 位于右下角时，锚点为中心点而非原 floorPlanPos", () => {
+    const home = normalizeHomeData({
+      areas: [
+        {
+          id: "corner",
+          floorPlanPos: { x: 5, y: 5 },
+          bounds: { x: 90, y: 90, w: 10, h: 10 },
+        },
+      ],
+    });
+    expect(home?.areas[0].floorPlanPos).toEqual({ x: 95, y: 95 });
+  });
+
+  it("bounds 含 NaN/Infinity 时回退为 0，锚点对齐到 (0,0)", () => {
+    const home = normalizeHomeData({
+      areas: [
+        {
+          id: "bad",
+          bounds: { x: NaN, y: Infinity, w: "30" as unknown as number, h: undefined as unknown as number },
+        },
+      ],
+    });
+    expect(home?.areas[0].bounds).toEqual({ x: 0, y: 0, w: 0, h: 0 });
+    expect(home?.areas[0].floorPlanPos).toEqual({ x: 0, y: 0 });
+  });
+
+  it("无 bounds 的区域保留原 floorPlanPos，不受其他区域影响", () => {
+    const home = normalizeHomeData({
+      areas: [
+        { id: "with-bounds", floorPlanPos: { x: 1, y: 1 }, bounds: { x: 20, y: 20, w: 40, h: 40 } },
+        { id: "without-bounds", floorPlanPos: { x: 70, y: 30 } },
+      ],
+    });
+    expect(home?.areas[0].floorPlanPos).toEqual({ x: 40, y: 40 });
+    expect(home?.areas[1].floorPlanPos).toEqual({ x: 70, y: 30 });
+    expect(home?.areas[1].bounds).toBeUndefined();
+  });
+
   it("非对象输入返回 null", () => {
     expect(normalizeHomeData(null)).toBeNull();
     expect(normalizeHomeData("invalid")).toBeNull();

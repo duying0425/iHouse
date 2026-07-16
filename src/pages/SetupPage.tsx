@@ -270,9 +270,8 @@ export default function SetupPage() {
                   onClick={() => {
                     setEditMode((prev) => {
                       const next = prev === "all" ? null : "all";
-                      if (next !== "all") {
-                        setHighlightAreaId(null);
-                      }
+                      // 进入或退出“编辑全部”时都应清除单区域高亮，避免残留
+                      setHighlightAreaId(null);
                       return next;
                     });
                   }}
