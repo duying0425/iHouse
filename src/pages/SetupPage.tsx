@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Save,
   Settings2,
+  Trash2,
   Upload,
   UploadCloud,
   X,
