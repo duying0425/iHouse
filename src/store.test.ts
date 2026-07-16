@@ -56,7 +56,7 @@ describe("store 区域锚点与边界双向同步", () => {
     it("拖到左上边界时，bounds 被 clamp 到 (0,0)", () => {
       useHomeStore.getState().updateAreaPos("a", { x: 0, y: 0 });
       const a = currentArea("a")!;
-      expect(a.floorPlanPos).toEqual({ x: 0, y: 0 });
+      expect(a.floorPlanPos).toEqual({ x: 10, y: 10 });
       // pos - w/2 = 0 - 10 = -10 → clamp 到 0
       expect(a.bounds).toEqual({ x: 0, y: 0, w: 20, h: 20 });
     });
@@ -64,7 +64,7 @@ describe("store 区域锚点与边界双向同步", () => {
     it("拖到右下边界时，bounds 被 clamp 到 (100-w, 100-h)", () => {
       useHomeStore.getState().updateAreaPos("a", { x: 100, y: 100 });
       const a = currentArea("a")!;
-      expect(a.floorPlanPos).toEqual({ x: 100, y: 100 });
+      expect(a.floorPlanPos).toEqual({ x: 90, y: 90 });
       // pos - w/2 = 100 - 10 = 90；100 - w = 80 → clamp 到 80
       expect(a.bounds).toEqual({ x: 80, y: 80, w: 20, h: 20 });
     });

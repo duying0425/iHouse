@@ -297,23 +297,21 @@ export const useHomeStore = create<HomeState>()(
 
       updateAreaPos: (areaId, pos) => {
         set((state) => ({
-          areas: state.areas.map((a) =>
-            a.id === areaId
-              ? {
-                  ...a,
-                  floorPlanPos: pos,
-                  bounds: a.bounds
-                    ? (() => {
-                        const w = a.bounds.w;
-                        const h = a.bounds.h;
-                        const x = Math.max(0, Math.min(100 - w, pos.x - w / 2));
-                        const y = Math.max(0, Math.min(100 - h, pos.y - h / 2));
-                        return { x, y, w, h };
-                      })()
-                    : undefined,
-                }
-              : a
-          ),
+          areas: state.areas.map((a) => {
+            if (a.id !== areaId) return a;
+            if (!a.bounds) {
+              return { ...a, floorPlanPos: pos };
+            }
+            const w = a.bounds.w;
+            const h = a.bounds.h;
+            const x = Math.max(0, Math.min(100 - w, pos.x - w / 2));
+            const y = Math.max(0, Math.min(100 - h, pos.y - h / 2));
+            return {
+              ...a,
+              floorPlanPos: { x: x + w / 2, y: y + h / 2 },
+              bounds: { x, y, w, h },
+            };
+          }),
         }));
       },
 

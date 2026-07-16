@@ -1,8 +1,8 @@
 // 远程图片生成辅助
 // 统一通过远程图片生成接口为区域/物品提供配图
 
-const BASE =
-  "https://remote-pod.enterprise.trae.cn/api/ide/v1/text_to_image";
+// const BASE =
+//   "https://remote-pod.enterprise.trae.cn/api/ide/v1/text_to_image";
 
 export type ImageSize =
   | "square_hd"
@@ -39,7 +39,8 @@ const DEMO_IMAGE_MAP: Record<string, string> = {
 };
 
 /** 生成远程图片 URL */
-export function imageOf(prompt: string, size: ImageSize = "landscape_4_3"): string {
+export function imageOf(prompt: string, _size: ImageSize = "landscape_4_3"): string {
+  void _size;
   for (const [key, value] of Object.entries(DEMO_IMAGE_MAP)) {
     if (prompt.includes(key)) {
       return value;

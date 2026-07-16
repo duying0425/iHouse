@@ -478,6 +478,12 @@ export default function SetupPage() {
                               )
                             ) {
                               removeArea(a.id);
+                              if (editMode === a.id) {
+                                setEditMode(null);
+                              }
+                              if (highlightAreaId === a.id) {
+                                setHighlightAreaId(null);
+                              }
                             }
                           }}
                           className="shrink-0 text-ink/30 transition-colors hover:text-ochre"
