@@ -472,7 +472,10 @@ export default function FloorPlan({
             - 内置模式下非编辑时已由上方房间矩形渲染；编辑时统一在此渲染带把手
             - 拖拽中跟随本地 state */}
         {areas.map((a) => {
-          if (!boundsEditable) return null;
+          const isHi = a.id === highlightAreaId;
+          // 非编辑状态下，只有处于图片模式且被高亮时，才显示半透明矩形作为高亮效果
+          if (!boundsEditable && (!isHi || !isImageMode)) return null;
+
           // 拖拽中用本地 state，否则用已保存 bounds
           const isDragging = a.id === dragBoundsId;
           const b = isDragging && dragBoundsCurrent ? dragBoundsCurrent : a.bounds;
@@ -481,7 +484,6 @@ export default function FloorPlan({
           const y = pctToY(b.y);
           const w = pctToX(b.w);
           const h = pctToY(b.h);
-          const isHi = a.id === highlightAreaId;
           return (
             <g key={`bounds-${a.id}`}>
               {/* 半透明填充 + 边框 */}
@@ -491,15 +493,16 @@ export default function FloorPlan({
                 width={w}
                 height={h}
                 fill={isHi ? "#A86B3C" : "#3D5A4A"}
-                fillOpacity={isDragging ? 0.22 : 0.12}
+                fillOpacity={boundsEditable ? (isDragging ? 0.22 : 0.12) : 0.15}
                 stroke={isHi || isDragging ? "#A86B3C" : "#3D5A4A"}
-                strokeWidth={isDragging ? 2.5 : 2}
-                strokeDasharray={isDragging ? "6 4" : undefined}
-                onPointerDown={(e) => startBoundsDrag(e, a.id, "move", b)}
+                strokeWidth={boundsEditable ? (isDragging ? 2.5 : 2) : 2}
+                strokeDasharray={boundsEditable && isDragging ? "6 4" : undefined}
+                onPointerDown={boundsEditable ? (e) => startBoundsDrag(e, a.id, "move", b) : undefined}
                 className={cn(boundsEditable && "cursor-move")}
+                style={!boundsEditable ? { pointerEvents: "none" } : undefined}
               />
               {/* 区域名（图片模式下便于识别） */}
-              {isImageMode && !compact && (
+              {isImageMode && !compact && boundsEditable && (
                 <text
                   x={x + w / 2}
                   y={y + h / 2}

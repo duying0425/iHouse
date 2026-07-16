@@ -298,7 +298,21 @@ export const useHomeStore = create<HomeState>()(
       updateAreaPos: (areaId, pos) => {
         set((state) => ({
           areas: state.areas.map((a) =>
-            a.id === areaId ? { ...a, floorPlanPos: pos } : a
+            a.id === areaId
+              ? {
+                  ...a,
+                  floorPlanPos: pos,
+                  bounds: a.bounds
+                    ? (() => {
+                        const w = a.bounds.w;
+                        const h = a.bounds.h;
+                        const x = Math.max(0, Math.min(100 - w, pos.x - w / 2));
+                        const y = Math.max(0, Math.min(100 - h, pos.y - h / 2));
+                        return { x, y, w, h };
+                      })()
+                    : undefined,
+                }
+              : a
           ),
         }));
       },
@@ -307,7 +321,13 @@ export const useHomeStore = create<HomeState>()(
         set((state) => ({
           areas: state.areas.map((a) =>
             a.id === areaId
-              ? { ...a, bounds: bounds ?? undefined }
+              ? {
+                  ...a,
+                  bounds: bounds ?? undefined,
+                  floorPlanPos: bounds
+                    ? { x: bounds.x + bounds.w / 2, y: bounds.y + bounds.h / 2 }
+                    : a.floorPlanPos,
+                }
               : a
           ),
         }));
