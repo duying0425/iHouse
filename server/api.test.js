@@ -468,6 +468,115 @@ describe("房屋 CRUD 与查询 API", () => {
   });
 });
 
+describe("图片上传 tmp → 正式 转正流程", () => {
+  let token;
+  let houseId;
+  const tmpPixelPng =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+  beforeAll(async () => {
+    const r = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: "alice", password: "alice-pwd-123" }),
+    });
+    token = (await parseJson(r)).token;
+
+    const r2 = await authFetch("/api/houses", token, {
+      method: "POST",
+      body: JSON.stringify({ name: "上传测试房屋" }),
+    });
+    houseId = (await parseJson(r2)).house.id;
+  });
+
+  it("POST /api/upload 返回 /api/images/tmp/xxx URL", async () => {
+    const r = await authFetch("/api/upload", token, {
+      method: "POST",
+      body: JSON.stringify({ image: tmpPixelPng }),
+    });
+    expect(r.status).toBe(200);
+    const data = await parseJson(r);
+    expect(data.url).toMatch(/^\/api\/images\/tmp\/[a-f0-9]{32}\.png$/);
+    // 暂存到全局供后续测试使用
+    globalThis.__tmpUploadUrl = data.url;
+  });
+
+  it("GET /api/images/tmp/xxx 能访问到 tmp 文件", async () => {
+    const url = globalThis.__tmpUploadUrl;
+    const r = await fetch(`${baseUrl}${url}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Type")).toMatch(/image\/png/);
+  });
+
+  it("PUT 房屋数据后，引用的 tmp URL 被转正为 /api/images/xxx", async () => {
+    const url = globalThis.__tmpUploadUrl;
+    const home = {
+      title: "上传测试房屋",
+      subtitle: "",
+      floorPlanImage: "",
+      areas: [
+        {
+          id: "area-test",
+          name: "测试区",
+          floorPlanPos: { x: 50, y: 50 },
+          images: [],
+          items: [
+            {
+              id: "item-test",
+              areaId: "area-test",
+              name: "测试物品",
+              category: "其他",
+              image: url,
+              gallery: [url],
+            },
+          ],
+        },
+      ],
+    };
+    const r = await authFetch(`/api/houses/${houseId}/data`, token, {
+      method: "PUT",
+      body: JSON.stringify(home),
+    });
+    expect(r.status).toBe(200);
+
+    const r2 = await authFetch(`/api/houses/${houseId}/data`, token);
+    const data = await parseJson(r2);
+    expect(data.areas[0].items[0].image).toMatch(
+      /^\/api\/images\/[a-f0-9]{32}\.png$/
+    );
+    expect(data.areas[0].items[0].image).not.toContain("/tmp/");
+    expect(data.areas[0].items[0].gallery[0]).toBe(
+      data.areas[0].items[0].image
+    );
+    // 暂存转正后的 URL
+    globalThis.__finalUrl = data.areas[0].items[0].image;
+  });
+
+  it("转正后的 /api/images/xxx URL 可访问", async () => {
+    const r = await fetch(`${baseUrl}${globalThis.__finalUrl}`);
+    expect(r.status).toBe(200);
+    expect(r.headers.get("Content-Type")).toMatch(/image\/png/);
+  });
+
+  it("tmp 副本应保留（24h 兜底窗口）", async () => {
+    const r = await fetch(`${baseUrl}${globalThis.__tmpUploadUrl}`);
+    expect(r.status).toBe(200);
+  });
+
+  it("未保存引用的 tmp 文件仍可访问，但不会被转正", async () => {
+    // 上传一张新图但不写入房屋数据
+    const r = await authFetch("/api/upload", token, {
+      method: "POST",
+      body: JSON.stringify({ image: tmpPixelPng }),
+    });
+    const data = await parseJson(r);
+    expect(data.url).toMatch(/^\/api\/images\/tmp\//);
+    // 不做 PUT，该 tmp 文件不会被转正，但应能访问
+    const r2 = await fetch(`${baseUrl}${data.url}`);
+    expect(r2.status).toBe(200);
+  });
+});
+
 describe("成员管理与加入流程", () => {
   let adminToken;
   let bobToken;

@@ -7,7 +7,7 @@ import crypto from "crypto";
 import JSZip from "jszip";
 import multer from "multer";
 import dotenv from "dotenv";
-import { extractBase64Images, collectImageRefs } from "./utils.js";
+import { extractBase64Images, collectImageRefs, finalizeTempImages, cleanupTempImages } from "./utils.js";
 import {
   AiRecognitionError,
   recognizeItemFromImage,
@@ -45,6 +45,15 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const IMAGES_DIR = path.join(DATA_DIR, "images");
 fs.mkdirSync(IMAGES_DIR, { recursive: true });
+
+// 临时图片目录：上传时先写到这里，房屋数据 PUT 时再"转正"到正式目录。
+// 未被转正的 tmp 文件由 cleanupTempImages 周期性清理（默认 24h）。
+const IMAGES_TMP_DIR = path.join(IMAGES_DIR, "tmp");
+fs.mkdirSync(IMAGES_TMP_DIR, { recursive: true });
+// 临时图片最大存活时长：24 小时
+const TMP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+// 清理周期：1 小时
+const TMP_CLEANUP_INTERVAL_MS = 60 * 60 * 1000;
 
 const DB_PATH = path.join(DATA_DIR, "home.db");
 // 前端构建产物目录
@@ -216,6 +225,19 @@ function migrateOldHomeToMultiUser() {
 
 migrateOldHomeToMultiUser();
 
+// 启动时清理一次过期的临时图片，并设定周期清理
+// （上传后未被保存引用的 tmp 文件会留存到此处被删除）
+const initialRemoved = cleanupTempImages(IMAGES_TMP_DIR, TMP_MAX_AGE_MS);
+if (initialRemoved > 0) {
+  console.log(`[tmp-cleanup] 启动时清理了 ${initialRemoved} 个过期临时图片`);
+}
+setInterval(() => {
+  const n = cleanupTempImages(IMAGES_TMP_DIR, TMP_MAX_AGE_MS);
+  if (n > 0) {
+    console.log(`[tmp-cleanup] 清理了 ${n} 个过期临时图片`);
+  }
+}, TMP_CLEANUP_INTERVAL_MS).unref();
+
 const app = express();
 // base64 图片可能较大，放宽 body 限制
 app.use(express.json({ limit: "256mb" }));
@@ -238,6 +260,10 @@ app.get("/api/health", (_req, res) => {
 app.use("/api/images", express.static(IMAGES_DIR));
 
 // 独立上传图片接口（需登录）
+// 上传的图片先落入 tmp 子目录，URL 形如 /api/images/tmp/xxx.jpg。
+// 当用户保存物品/房屋数据（PUT /api/houses/:id/data）时，
+// finalizeTempImages 会自动把引用到的 tmp 文件复制到正式目录并把 URL 改写为
+// /api/images/xxx.jpg。未被保存引用的 tmp 文件由 cleanupTempImages 定期清理。
 app.post("/api/upload", requireAuth, (req, res) => {
   const { image } = req.body;
   if (!image) {
@@ -256,13 +282,13 @@ app.post("/api/upload", requireAuth, (req, res) => {
     const dataBuffer = Buffer.from(matches[2], "base64");
     const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
     const filename = `${hash}.${ext}`;
-    const filePath = path.join(IMAGES_DIR, filename);
+    const filePath = path.join(IMAGES_TMP_DIR, filename);
 
     try {
       if (!fs.existsSync(filePath)) {
         fs.writeFileSync(filePath, dataBuffer);
       }
-      return res.json({ url: `/api/images/${filename}` });
+      return res.json({ url: `/api/images/tmp/${filename}` });
     } catch (err) {
       console.error("保存上传的图片失败:", err);
       return res.status(500).json({ error: "Failed to save image" });
@@ -684,7 +710,12 @@ app.put("/api/houses/:id/data", requireAuth, (req, res) => {
     return res.status(403).json({ ok: false, error: "无权修改该房屋" });
   }
   const homeData = req.body ?? null;
-  if (homeData) extractBase64Images(homeData, IMAGES_DIR);
+  if (homeData) {
+    // 1) 内嵌的 base64 数据落盘为正式图片
+    extractBase64Images(homeData, IMAGES_DIR);
+    // 2) 把引用的 tmp 临时图片转正（复制到正式目录并改写 URL）
+    finalizeTempImages(homeData, IMAGES_DIR, IMAGES_TMP_DIR);
+  }
   const data = JSON.stringify(homeData);
   const now = new Date().toISOString();
   db.prepare("UPDATE houses SET data = ?, updated_at = ? WHERE id = ?").run(data, now, req.params.id);

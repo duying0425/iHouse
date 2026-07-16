@@ -59,6 +59,103 @@ function replaceBase64(str, imagesDir) {
 }
 
 /**
+ * 把数据中引用的 /api/images/tmp/xxx 临时图片转正为 /api/images/xxx。
+ * 转正方式：将 tmp 目录下的物理文件复制到正式目录（保留 tmp 副本，
+ * 让前端已持有的 tmp URL 在 24h 清理窗口内依然可访问）。
+ * 重复内容（md5 同名）跳过写入。
+ * @param {object} obj - 要遍历和修改的 JSON 对象
+ * @param {string} imagesDir - 正式图片目录
+ * @param {string} tmpDir - 临时图片目录（imagesDir/tmp）
+ * @returns {boolean} 是否发生了修改
+ */
+export function finalizeTempImages(obj, imagesDir, tmpDir) {
+  let changed = false;
+  if (!obj || typeof obj !== "object") return changed;
+
+  for (const key in obj) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
+    const value = obj[key];
+
+    if (typeof value === "string") {
+      const replaced = finalizeOne(value, imagesDir, tmpDir);
+      if (replaced !== value) {
+        obj[key] = replaced;
+        changed = true;
+      }
+    } else if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        const item = value[i];
+        if (typeof item === "string") {
+          const replaced = finalizeOne(item, imagesDir, tmpDir);
+          if (replaced !== item) {
+            value[i] = replaced;
+            changed = true;
+          }
+        } else if (item && typeof item === "object") {
+          if (finalizeTempImages(item, imagesDir, tmpDir)) changed = true;
+        }
+      }
+    } else if (value && typeof value === "object") {
+      if (finalizeTempImages(value, imagesDir, tmpDir)) changed = true;
+    }
+  }
+  return changed;
+}
+
+function finalizeOne(str, imagesDir, tmpDir) {
+  // 仅匹配 /api/images/tmp/<name>，不误伤 /api/images/<name>
+  const m = str.match(/^\/api\/images\/tmp\/(.+)$/);
+  if (!m) return str;
+  const filename = m[1];
+  const srcPath = path.join(tmpDir, filename);
+  const destPath = path.join(imagesDir, filename);
+  if (!fs.existsSync(srcPath)) {
+    // 源文件已不在此前会话的 tmp 中。
+    return str;
+  }
+  if (!fs.existsSync(destPath)) {
+    try {
+      fs.copyFileSync(srcPath, destPath);
+    } catch (err) {
+      console.warn("[finalizeTempImages] 复制失败:", err);
+      return str;
+    }
+  }
+  return `/api/images/${filename}`;
+}
+
+/**
+ * 清理临时图片目录中超过 maxAgeMs 的文件。
+ * @param {string} tmpDir - 临时图片目录
+ * @param {number} maxAgeMs - 最大存活时长（毫秒）
+ * @returns {number} 删除的文件数
+ */
+export function cleanupTempImages(tmpDir, maxAgeMs) {
+  if (!fs.existsSync(tmpDir)) return 0;
+  const now = Date.now();
+  let removed = 0;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(tmpDir);
+  } catch {
+    return 0;
+  }
+  for (const name of entries) {
+    const filePath = path.join(tmpDir, name);
+    try {
+      const stat = fs.statSync(filePath);
+      if (stat.isFile() && now - stat.mtimeMs > maxAgeMs) {
+        fs.unlinkSync(filePath);
+        removed++;
+      }
+    } catch {
+      // 单文件失败不影响其它
+    }
+  }
+  return removed;
+}
+
+/**
  * 收集 home state 中所有引用的图片文件名。
  * 仅匹配形如 "/api/images/xxx.ext" 的字符串。
  * @param {object} obj - home state

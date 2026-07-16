@@ -33,7 +33,7 @@ describe("uploadImage utility", () => {
   it("should upload base64 image and return new URL on successful response", async () => {
     const mockResponse = {
       ok: true,
-      json: async () => ({ url: "/api/images/uploaded_hash.png" })
+      json: async () => ({ url: "/api/images/tmp/uploaded_hash.png" })
     };
     const mockFetch = vi.fn().mockResolvedValue(mockResponse);
     globalThis.fetch = mockFetch as typeof globalThis.fetch;
@@ -47,7 +47,7 @@ describe("uploadImage utility", () => {
     expect(init.method).toBe("POST");
     expect(new Headers(init.headers).get("Content-Type")).toBe("application/json");
     expect(init.body).toBe(JSON.stringify({ image: base64Input }));
-    expect(result).toBe("/api/images/uploaded_hash.png");
+    expect(result).toBe("/api/images/tmp/uploaded_hash.png");
   });
 
   it("should fallback to base64 if fetch response is not ok", async () => {
