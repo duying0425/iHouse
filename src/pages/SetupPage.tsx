@@ -57,7 +57,7 @@ export default function SetupPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importHint, setImportHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [boundsEdit, setBoundsEdit] = useState(false);
+  const [editMode, setEditMode] = useState<"all" | string | null>(null);
   const [highlightAreaId, setHighlightAreaId] = useState<string | null>(null);
   const currentHouseId = useAuthStore((s) => s.currentHouseId);
   const reloadCurrentHouse = useHomeStore((s) => s.reloadCurrentHouse);
@@ -268,20 +268,20 @@ export default function SetupPage() {
                 </button>
                 <button
                   onClick={() => {
-                    setBoundsEdit((v) => {
-                      const next = !v;
-                      if (!next) {
+                    setEditMode((prev) => {
+                      const next = prev === "all" ? null : "all";
+                      if (next !== "all") {
                         setHighlightAreaId(null);
                       }
                       return next;
                     });
                   }}
-                  className={boundsEdit ? "btn-primary" : "btn-secondary"}
-                  title={boundsEdit ? "退出区域范围编辑" : "进入区域范围编辑：拖拽矩形或把手调整每个区域的覆盖范围"}
+                  className={editMode === "all" ? "btn-primary" : "btn-secondary"}
+                  title={editMode === "all" ? "退出区域范围编辑" : "进入区域范围编辑：拖拽矩形或把手调整每个区域的覆盖范围"}
                 >
-                  <Crop size={15} /> {boundsEdit ? "完成范围" : "编辑区域范围"}
+                  <Crop size={15} /> {editMode === "all" ? "完成范围" : "编辑区域范围"}
                 </button>
-                {!isImageMode && !boundsEdit && (
+                {!isImageMode && !editMode && (
                   <span className="text-2xs text-ink/45">当前：内置示例图</span>
                 )}
               </div>
@@ -294,7 +294,7 @@ export default function SetupPage() {
                   floorPlanImage={floorPlanImage}
                   editable
                   onAreaMove={updateAreaPos}
-                  boundsEditable={boundsEdit}
+                  boundsEditable={editMode === "all" ? true : (editMode || false)}
                   onAreaBoundsChange={updateAreaBounds}
                   highlightAreaId={highlightAreaId || undefined}
                   showAreaAnchors
@@ -423,22 +423,39 @@ export default function SetupPage() {
                         </span>
                         <button
                           onClick={() => {
-                            if (!a.bounds) {
-                              updateAreaBounds(a.id, makeDefaultBounds(a.floorPlanPos));
+                            if (editMode === a.id) {
+                              setEditMode(null);
+                              setHighlightAreaId(null);
+                            } else {
+                              if (!a.bounds) {
+                                updateAreaBounds(a.id, makeDefaultBounds(a.floorPlanPos));
+                              }
+                              setEditMode(a.id);
+                              setHighlightAreaId(a.id);
                             }
-                            setBoundsEdit(true);
-                            setHighlightAreaId(a.id);
                           }}
                           className={cn(
                             "shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors",
-                            highlightAreaId === a.id
+                            editMode === a.id
                               ? "bg-moss text-cream"
                               : a.bounds
                               ? "text-moss hover:bg-moss/10"
                               : "text-clay-600 hover:bg-clay-100"
                           )}
-                          title={a.bounds ? "在图上高亮并编辑该范围" : "以锚点为中心创建覆盖范围矩形"}
-                          aria-label={a.bounds ? "编辑范围" : "画范围"}
+                          title={
+                            editMode === a.id
+                              ? "保存并退出编辑"
+                              : a.bounds
+                              ? "在图上高亮并编辑该范围"
+                              : "以锚点为中心创建覆盖范围矩形"
+                          }
+                          aria-label={
+                            editMode === a.id
+                              ? "保存范围"
+                              : a.bounds
+                              ? "编辑范围"
+                              : "画范围"
+                          }
                         >
                           <Crop size={13} />
                         </button>

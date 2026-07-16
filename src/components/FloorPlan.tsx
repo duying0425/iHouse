@@ -40,7 +40,7 @@ interface FloorPlanProps {
   editable?: boolean;
   onAreaMove?: (areaId: string, pos: AnchorPosition) => void;
   /** 区域矩形边界(bounds)可编辑（设置模式用），拖拽结束回调；传 null 清除 */
-  boundsEditable?: boolean;
+  boundsEditable?: boolean | string;
   onAreaBoundsChange?: (areaId: string, bounds: Bounds | null) => void;
   /** 是否显示区域序号锚点 */
   showAreaAnchors?: boolean;
@@ -179,6 +179,8 @@ export default function FloorPlan({
   const startBoundsDrag = useCallback(
     (e: React.PointerEvent, areaId: string, handle: Handle, current: Bounds) => {
       if (!boundsEditable || !onAreaBoundsChange) return;
+      const isEditable = boundsEditable === true || boundsEditable === areaId;
+      if (!isEditable) return;
       e.stopPropagation();
       dragBoundsIdRef.current = areaId;
       dragHandleRef.current = handle;
@@ -473,8 +475,9 @@ export default function FloorPlan({
             - 拖拽中跟随本地 state */}
         {areas.map((a) => {
           const isHi = a.id === highlightAreaId;
+          const isEditable = boundsEditable === true || boundsEditable === a.id;
           // 非编辑状态下，只有处于图片模式且被高亮时，才显示半透明矩形作为高亮效果
-          if (!boundsEditable && (!isHi || !isImageMode)) return null;
+          if (!isEditable && (!isHi || !isImageMode)) return null;
 
           // 拖拽中用本地 state，否则用已保存 bounds
           const isDragging = a.id === dragBoundsId;
@@ -493,16 +496,16 @@ export default function FloorPlan({
                 width={w}
                 height={h}
                 fill={isHi ? "#A86B3C" : "#3D5A4A"}
-                fillOpacity={boundsEditable ? (isDragging ? 0.22 : 0.12) : 0.15}
+                fillOpacity={isEditable ? (isDragging ? 0.22 : 0.12) : 0.15}
                 stroke={isHi || isDragging ? "#A86B3C" : "#3D5A4A"}
-                strokeWidth={boundsEditable ? (isDragging ? 2.5 : 2) : 2}
-                strokeDasharray={boundsEditable && isDragging ? "6 4" : undefined}
-                onPointerDown={boundsEditable ? (e) => startBoundsDrag(e, a.id, "move", b) : undefined}
-                className={cn(boundsEditable && "cursor-move")}
-                style={!boundsEditable ? { pointerEvents: "none" } : undefined}
+                strokeWidth={isEditable ? (isDragging ? 2.5 : 2) : 2}
+                strokeDasharray={isEditable && isDragging ? "6 4" : undefined}
+                onPointerDown={isEditable ? (e) => startBoundsDrag(e, a.id, "move", b) : undefined}
+                className={cn(isEditable && "cursor-move")}
+                style={!isEditable ? { pointerEvents: "none" } : undefined}
               />
               {/* 区域名（图片模式下便于识别） */}
-              {isImageMode && !compact && boundsEditable && (
+              {isImageMode && !compact && isEditable && (
                 <text
                   x={x + w / 2}
                   y={y + h / 2}
@@ -519,7 +522,7 @@ export default function FloorPlan({
                 </text>
               )}
               {/* 8 个把手 */}
-              {boundsEditable &&
+              {isEditable &&
                 HANDLES.map(({ handle, cursor }) => {
                   const hp = handlePos(b, handle);
                   return (
