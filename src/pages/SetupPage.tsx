@@ -276,10 +276,7 @@ export default function SetupPage() {
                       return next;
                     });
                   }}
-                  className={cn(
-                    "btn-secondary",
-                    boundsEdit && "bg-clay-500 text-cream hover:bg-clay-600"
-                  )}
+                  className={boundsEdit ? "btn-primary" : "btn-secondary"}
                   title={boundsEdit ? "退出区域范围编辑" : "进入区域范围编辑：拖拽矩形或把手调整每个区域的覆盖范围"}
                 >
                   <Crop size={15} /> {boundsEdit ? "完成范围" : "编辑区域范围"}
