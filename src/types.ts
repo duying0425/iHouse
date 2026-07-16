@@ -6,6 +6,14 @@ export interface AnchorPosition {
   y: number;
 }
 
+/** 矩形边界（相对户型图的百分比 0-100） */
+export interface Bounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 /** 物品/设施分类 */
 export type Category =
   | "家电"
@@ -89,7 +97,7 @@ export interface Area {
   /** 在整屋户型图上的锚点位置 */
   floorPlanPos: AnchorPosition;
   /** 户型图上该区域的矩形边界（百分比）用于高亮 */
-  bounds?: { x: number; y: number; w: number; h: number };
+  bounds?: Bounds;
   /** 区域图片（1 张或多张），物品位置标在这些图上 */
   images: AreaImage[];
   description?: string;

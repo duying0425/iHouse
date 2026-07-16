@@ -4,6 +4,7 @@ import type {
   AnchorPosition,
   Area,
   AreaImage,
+  Bounds,
   Home,
   Item,
   ItemDestination,
@@ -67,6 +68,7 @@ interface HomeState extends Home {
   setFloorPlanImage: (image: string) => void;
   setHomeTitle: (title: string) => void;
   updateAreaPos: (areaId: string, pos: AnchorPosition) => void;
+  updateAreaBounds: (areaId: string, bounds: Bounds | null) => void;
   clearAllAreas: () => void;
   startBlank: () => void;
 
@@ -297,6 +299,16 @@ export const useHomeStore = create<HomeState>()(
         set((state) => ({
           areas: state.areas.map((a) =>
             a.id === areaId ? { ...a, floorPlanPos: pos } : a
+          ),
+        }));
+      },
+
+      updateAreaBounds: (areaId, bounds) => {
+        set((state) => ({
+          areas: state.areas.map((a) =>
+            a.id === areaId
+              ? { ...a, bounds: bounds ?? undefined }
+              : a
           ),
         }));
       },

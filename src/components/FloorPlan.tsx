@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { AnchorPosition, Area } from "@/types";
+import type { AnchorPosition, Area, Bounds } from "@/types";
 import { cn } from "@/lib/utils";
 
 const VB_W = 1000;
@@ -7,6 +7,9 @@ const VB_H = 720;
 
 /** 内置户型图标识：使用 SVG 绘制 */
 export const BUILTIN_FLOORPLAN = "builtin-floorplan";
+
+/** bounds 调整把手类型：move=整体移动，其余为 8 个方向 */
+type Handle = "move" | "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
 interface Marker {
   id: string;
@@ -36,6 +39,9 @@ interface FloorPlanProps {
   /** 区域锚点可拖拽（设置模式用），拖拽结束回调 */
   editable?: boolean;
   onAreaMove?: (areaId: string, pos: AnchorPosition) => void;
+  /** 区域矩形边界(bounds)可编辑（设置模式用），拖拽结束回调；传 null 清除 */
+  boundsEditable?: boolean;
+  onAreaBoundsChange?: (areaId: string, bounds: Bounds | null) => void;
   /** 是否显示区域序号锚点 */
   showAreaAnchors?: boolean;
   /** 紧凑模式（侧栏小图） */
@@ -46,6 +52,79 @@ interface FloorPlanProps {
 
 const pctToX = (p: number) => (p / 100) * VB_W;
 const pctToY = (p: number) => (p / 100) * VB_H;
+
+const MIN_SIZE = 2; // bounds 最小宽高（百分比）
+
+/** 把 bounds 限制在 0-100 范围内，并保证最小尺寸 */
+function clampBounds(b: Bounds): Bounds {
+  let { x, y, w, h } = b;
+  // 先保证最小尺寸
+  w = Math.max(MIN_SIZE, w);
+  h = Math.max(MIN_SIZE, h);
+  // 左上越界：把超出部分截掉
+  if (x < 0) {
+    w += x;
+    x = 0;
+  }
+  if (y < 0) {
+    h += y;
+    y = 0;
+  }
+  // 右下越界：截到 100
+  if (x + w > 100) w = 100 - x;
+  if (y + h > 100) h = 100 - y;
+  // 再次保证最小尺寸（极端情况）
+  w = Math.max(MIN_SIZE, w);
+  h = Math.max(MIN_SIZE, h);
+  return { x, y, w, h };
+}
+
+/** 根据 handle 类型与指针位移计算新 bounds */
+function resizeBounds(
+  start: Bounds,
+  handle: Handle,
+  dx: number,
+  dy: number
+): Bounds {
+  let { x, y, w, h } = start;
+  switch (handle) {
+    case "move":
+      x += dx;
+      y += dy;
+      break;
+    case "nw":
+      x += dx;
+      y += dy;
+      w -= dx;
+      h -= dy;
+      break;
+    case "n":
+      y += dy;
+      h -= dy;
+      break;
+    case "ne":
+      y += dy;
+      w += dx;
+      h -= dy;
+      break;
+    case "e":
+      w += dx;
+      break;
+    case "se":
+      w += dx;
+      h += dy;
+      break;
+    case "s":
+      h += dy;
+      break;
+    case "sw":
+      x += dx;
+      w -= dx;
+      h += dy;
+      break;
+  }
+  return clampBounds({ x, y, w, h });
+}
 
 export default function FloorPlan({
   areas,
@@ -59,17 +138,28 @@ export default function FloorPlan({
   onAreaClick,
   editable = false,
   onAreaMove,
+  boundsEditable = false,
+  onAreaBoundsChange,
   showAreaAnchors = true,
   compact = false,
   className,
   style,
 }: FloorPlanProps) {
   const svgRef = useRef<SVGSVGElement>(null);
-  // 拖拽用 ref 避免闭包过期；用 state 触发视觉刷新
+
+  // 锚点拖拽：ref 避免闭包过期；state 触发视觉刷新
   const dragIdRef = useRef<string | null>(null);
   const dragPosRef = useRef<AnchorPosition | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<AnchorPosition | null>(null);
+
+  // bounds 拖拽：与锚点拖拽互斥（同一时间只进行一种）
+  const dragBoundsIdRef = useRef<string | null>(null);
+  const dragHandleRef = useRef<Handle | null>(null);
+  const dragStartBoundsRef = useRef<Bounds | null>(null);
+  const dragPointerStartRef = useRef<AnchorPosition | null>(null);
+  const [dragBoundsId, setDragBoundsId] = useState<string | null>(null);
+  const [dragBoundsCurrent, setDragBoundsCurrent] = useState<Bounds | null>(null);
 
   const isImageMode =
     !!floorPlanImage && floorPlanImage !== BUILTIN_FLOORPLAN;
@@ -97,13 +187,11 @@ export default function FloorPlan({
   );
 
   /**
-   * 拖拽区域锚点：
-   * - 拖拽期间只更新本地 state（不写 store），避免每个像素触发全局 re-render
-   * - pointer capture 绑定在稳定的 <svg> 上（而非会被 React 替换的 <circle>），
-   *   保证 pointerup 一定能收到，dragId 不会卡死
-   * - pointerup 时才把最终位置写入 store（仅一次）
+   * 锚点拖拽：拖拽期间只更新本地 state（不写 store），避免每个像素触发全局 re-render。
+   * pointer capture 绑定在稳定的 <svg> 上，保证 pointerup 一定能收到。
+   * pointerup 时才把最终位置写入 store（仅一次）。
    */
-  const startDrag = useCallback(
+  const startAnchorDrag = useCallback(
     (e: React.PointerEvent, areaId: string) => {
       if (!editable) return;
       e.stopPropagation();
@@ -112,39 +200,120 @@ export default function FloorPlan({
       const p = toPct(e.clientX, e.clientY);
       dragPosRef.current = p;
       setDragPos(p);
-      // 在稳定的 SVG 上捕获指针，确保拖拽期间持续接收事件、且 pointerup 必到
       svgRef.current?.setPointerCapture?.(e.pointerId);
     },
     [editable, toPct]
   );
 
+  /** bounds 拖拽：move=整体移动，其余=调整对应边/角 */
+  const startBoundsDrag = useCallback(
+    (e: React.PointerEvent, areaId: string, handle: Handle, current: Bounds) => {
+      if (!boundsEditable || !onAreaBoundsChange) return;
+      e.stopPropagation();
+      dragBoundsIdRef.current = areaId;
+      dragHandleRef.current = handle;
+      dragStartBoundsRef.current = current;
+      const p = toPct(e.clientX, e.clientY);
+      dragPointerStartRef.current = p;
+      setDragBoundsId(areaId);
+      setDragBoundsCurrent(current);
+      svgRef.current?.setPointerCapture?.(e.pointerId);
+    },
+    [boundsEditable, onAreaBoundsChange, toPct]
+  );
+
   const handlePointerMove = useCallback(
     (e: React.PointerEvent<SVGSVGElement>) => {
-      if (!dragIdRef.current) return;
-      const p = toPct(e.clientX, e.clientY);
-      if (!p) return;
-      dragPosRef.current = p;
-      setDragPos(p); // 仅本地 state
+      // bounds 拖拽优先
+      if (dragBoundsIdRef.current) {
+        const p = toPct(e.clientX, e.clientY);
+        const start = dragStartBoundsRef.current;
+        const sp = dragPointerStartRef.current;
+        const handle = dragHandleRef.current;
+        if (!p || !start || !sp || !handle) return;
+        const next = resizeBounds(start, handle, p.x - sp.x, p.y - sp.y);
+        setDragBoundsCurrent(next); // 仅本地 state
+        return;
+      }
+      // 锚点拖拽
+      if (dragIdRef.current) {
+        const p = toPct(e.clientX, e.clientY);
+        if (!p) return;
+        dragPosRef.current = p;
+        setDragPos(p);
+      }
     },
     [toPct]
   );
 
   const endDrag = useCallback(() => {
-    const id = dragIdRef.current;
-    const p = dragPosRef.current;
-    if (id && p && onAreaMove) {
-      onAreaMove(id, p); // 拖拽结束才写入 store
+    // bounds 拖拽结束
+    const bid = dragBoundsIdRef.current;
+    const bcur = dragBoundsCurrent;
+    if (bid && bcur && onAreaBoundsChange) {
+      onAreaBoundsChange(bid, bcur); // 拖拽结束才写入 store
+    }
+    dragBoundsIdRef.current = null;
+    dragHandleRef.current = null;
+    dragStartBoundsRef.current = null;
+    dragPointerStartRef.current = null;
+    setDragBoundsId(null);
+    setDragBoundsCurrent(null);
+
+    // 锚点拖拽结束
+    const aid = dragIdRef.current;
+    const apos = dragPosRef.current;
+    if (aid && apos && onAreaMove) {
+      onAreaMove(aid, apos);
     }
     dragIdRef.current = null;
     dragPosRef.current = null;
     setDragId(null);
     setDragPos(null);
-  }, [onAreaMove]);
+  }, [onAreaMove, onAreaBoundsChange, dragBoundsCurrent]);
 
   const areaFill = useMemo(
     () => (id: string) => (id === highlightAreaId ? "#EFD9C4" : "#FBF8F2"),
     [highlightAreaId]
   );
+
+  /** 8 个把手列表 */
+  const HANDLES: { handle: Handle; cursor: string }[] = useMemo(
+    () => [
+      { handle: "nw", cursor: "nwse-resize" },
+      { handle: "n", cursor: "ns-resize" },
+      { handle: "ne", cursor: "nesw-resize" },
+      { handle: "e", cursor: "ew-resize" },
+      { handle: "se", cursor: "nwse-resize" },
+      { handle: "s", cursor: "ns-resize" },
+      { handle: "sw", cursor: "nesw-resize" },
+      { handle: "w", cursor: "ew-resize" },
+    ],
+    []
+  );
+
+  /** 计算某个把手在 bounds 上的坐标（百分比） */
+  const handlePos = (b: Bounds, handle: Handle): AnchorPosition => {
+    switch (handle) {
+      case "nw":
+      case "move":
+        return { x: b.x, y: b.y };
+      case "n":
+        return { x: b.x + b.w / 2, y: b.y };
+      case "ne":
+        return { x: b.x + b.w, y: b.y };
+      case "e":
+        return { x: b.x + b.w, y: b.y + b.h / 2 };
+      case "se":
+        return { x: b.x + b.w, y: b.y + b.h };
+      case "s":
+        return { x: b.x + b.w / 2, y: b.y + b.h };
+      case "sw":
+        return { x: b.x, y: b.y + b.h };
+      case "w":
+        return { x: b.x, y: b.y + b.h / 2 };
+    }
+  };
 
   return (
     <div className={cn("relative w-full", className)} style={style}>
@@ -176,9 +345,10 @@ export default function FloorPlan({
         ) : (
           <>
             <rect x={0} y={0} width={VB_W} height={VB_H} fill="#F5F1EA" />
-            {/* 内置模式才画房间矩形 + 外墙 */}
+            {/* 内置模式才画房间矩形 + 外墙（若开启 bounds 编辑，房间矩形由下方统一渲染带把手） */}
             {areas.map((a, idx) => {
               if (!a.bounds) return null;
+              if (boundsEditable) return null; // 编辑模式下统一用带把手的渲染
               const x = pctToX(a.bounds.x);
               const y = pctToY(a.bounds.y);
               const w = pctToX(a.bounds.w);
@@ -324,6 +494,78 @@ export default function FloorPlan({
           </g>
         )}
 
+        {/* 区域矩形边界（bounds）：
+            - 图片模式下默认不显示，仅在 boundsEditable 时显示
+            - 内置模式下非编辑时已由上方房间矩形渲染；编辑时统一在此渲染带把手
+            - 拖拽中跟随本地 state */}
+        {areas.map((a) => {
+          if (!boundsEditable) return null;
+          // 拖拽中用本地 state，否则用已保存 bounds
+          const isDragging = a.id === dragBoundsId;
+          const b = isDragging && dragBoundsCurrent ? dragBoundsCurrent : a.bounds;
+          if (!b) return null;
+          const x = pctToX(b.x);
+          const y = pctToY(b.y);
+          const w = pctToX(b.w);
+          const h = pctToY(b.h);
+          const isHi = a.id === highlightAreaId;
+          return (
+            <g key={`bounds-${a.id}`}>
+              {/* 半透明填充 + 边框 */}
+              <rect
+                x={x}
+                y={y}
+                width={w}
+                height={h}
+                fill={isHi ? "#A86B3C" : "#3D5A4A"}
+                fillOpacity={isDragging ? 0.22 : 0.12}
+                stroke={isHi || isDragging ? "#A86B3C" : "#3D5A4A"}
+                strokeWidth={isDragging ? 2.5 : 2}
+                strokeDasharray={isDragging ? "6 4" : undefined}
+                onPointerDown={(e) => startBoundsDrag(e, a.id, "move", b)}
+                className={cn(boundsEditable && "cursor-move")}
+              />
+              {/* 区域名（图片模式下便于识别） */}
+              {isImageMode && !compact && (
+                <text
+                  x={x + w / 2}
+                  y={y + h / 2}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fill="#1F1B16"
+                  fontSize={20}
+                  fontFamily="'Noto Serif SC', serif"
+                  fontWeight={500}
+                  opacity={0.5}
+                  style={{ pointerEvents: "none" }}
+                >
+                  {a.name}
+                </text>
+              )}
+              {/* 8 个把手 */}
+              {boundsEditable &&
+                HANDLES.map(({ handle, cursor }) => {
+                  const hp = handlePos(b, handle);
+                  return (
+                    <rect
+                      key={handle}
+                      x={pctToX(hp.x) - 6}
+                      y={pctToY(hp.y) - 6}
+                      width={12}
+                      height={12}
+                      fill="#FBF8F2"
+                      stroke="#A86B3C"
+                      strokeWidth={2}
+                      rx={2}
+                      onPointerDown={(e) => startBoundsDrag(e, a.id, handle, b)}
+                      style={{ cursor }}
+                    />
+                  );
+                })}
+            </g>
+          );
+        })}
+
         {/* 区域序号锚点 */}
         {showAreaAnchors &&
           areas.map((a, idx) => {
@@ -341,7 +583,7 @@ export default function FloorPlan({
                   onAreaClick?.(a.id);
                   e.stopPropagation();
                 }}
-                onPointerDown={(e) => startDrag(e, a.id)}
+                onPointerDown={(e) => startAnchorDrag(e, a.id)}
                 className={cn(
                   onAreaClick && !editable && "cursor-pointer",
                   editable && "cursor-grab active:cursor-grabbing"

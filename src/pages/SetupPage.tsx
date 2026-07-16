@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   Camera,
   ChevronRight,
+  Crop,
   Download,
   GripVertical,
   ImageUp,
@@ -44,6 +45,7 @@ export default function SetupPage() {
     removeAreaImage,
     startBlank,
     resetDemo,
+    updateAreaBounds,
   } = useHomeStore();
 
   const fileRef = useRef<HTMLInputElement>(null);
@@ -55,6 +57,7 @@ export default function SetupPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importHint, setImportHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [boundsEdit, setBoundsEdit] = useState(false);
   const currentHouseId = useAuthStore((s) => s.currentHouseId);
   const reloadCurrentHouse = useHomeStore((s) => s.reloadCurrentHouse);
 
@@ -161,6 +164,15 @@ export default function SetupPage() {
     setEditName("");
   };
 
+  /** 给区域创建默认 bounds：以锚点为中心 24×24，clamp 在 0-100 */
+  const makeDefaultBounds = (pos: { x: number; y: number }) => {
+    const w = 24;
+    const h = 24;
+    const x = Math.max(0, Math.min(100 - w, pos.x - w / 2));
+    const y = Math.max(0, Math.min(100 - h, pos.y - h / 2));
+    return { x, y, w, h };
+  };
+
   return (
     <PageLayout
       title="户型设置"
@@ -253,7 +265,17 @@ export default function SetupPage() {
                 >
                   <Camera size={15} /> 拍照
                 </button>
-                {!isImageMode && (
+                <button
+                  onClick={() => setBoundsEdit((v) => !v)}
+                  className={cn(
+                    "btn-secondary",
+                    boundsEdit && "bg-clay-500 text-cream hover:bg-clay-600"
+                  )}
+                  title={boundsEdit ? "退出区域范围编辑" : "进入区域范围编辑：拖拽矩形或把手调整每个区域的覆盖范围"}
+                >
+                  <Crop size={15} /> {boundsEdit ? "完成范围" : "编辑区域范围"}
+                </button>
+                {!isImageMode && !boundsEdit && (
                   <span className="text-2xs text-ink/45">当前：内置示例图</span>
                 )}
               </div>
@@ -266,6 +288,8 @@ export default function SetupPage() {
                   floorPlanImage={floorPlanImage}
                   editable
                   onAreaMove={updateAreaPos}
+                  boundsEditable={boundsEdit}
+                  onAreaBoundsChange={updateAreaBounds}
                   showAreaAnchors
                 />
               ) : (
@@ -284,9 +308,11 @@ export default function SetupPage() {
                 />
               )}
               <p className="mt-3 text-2xs text-ink/45">
-                {isImageMode
-                  ? "拖拽图上的序号锚点到对应区域位置；锚点会自动保存。"
-                  : "上传图片后将进入拖拽模式；内置示例图下也可拖拽锚点调整位置。"}
+                {boundsEdit
+                  ? "编辑区域范围模式：拖拽矩形主体移动整体，拖拽 8 个把手调整边角；无矩形的区域请在右侧点「画范围」。"
+                  : isImageMode
+                  ? "拖拽图上的序号锚点到对应区域位置；锚点会自动保存。点「编辑区域范围」可为每个区域画出覆盖矩形。"
+                  : "上传图片后将进入拖拽模式；内置示例图下也可拖拽锚点调整位置。点「编辑区域范围」可调整房间矩形。"}
               </p>
             </div>
           </div>
@@ -388,6 +414,31 @@ export default function SetupPage() {
                         <span className="shrink-0 text-2xs text-ink/40">
                           {a.items.length} 件 · {a.images.length} 图
                         </span>
+                        <button
+                          onClick={() => {
+                            if (a.bounds) {
+                              updateAreaBounds(a.id, null);
+                            } else {
+                              updateAreaBounds(a.id, makeDefaultBounds(a.floorPlanPos));
+                              // 创建后自动进入范围编辑模式，便于直接调整
+                              setBoundsEdit(true);
+                            }
+                          }}
+                          className={cn(
+                            "shrink-0 rounded px-1.5 py-0.5 text-2xs transition-colors",
+                            a.bounds
+                              ? "text-moss hover:bg-moss/10"
+                              : "text-clay-600 hover:bg-clay-100"
+                          )}
+                          title={
+                            a.bounds
+                              ? "清除该区域在户型图上的覆盖范围"
+                              : "以锚点为中心创建覆盖范围矩形"
+                          }
+                          aria-label={a.bounds ? "清除范围" : "画范围"}
+                        >
+                          <Crop size={13} />
+                        </button>
                         <button
                           onClick={() => setExpandedId(expanded ? null : a.id)}
                           className={cn(
