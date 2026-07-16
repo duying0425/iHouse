@@ -9,7 +9,7 @@ const VB_H = 720;
 export const BUILTIN_FLOORPLAN = "builtin-floorplan";
 
 /** bounds 调整把手类型：move=整体移动，其余为 8 个方向 */
-type Handle = "move" | "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
+export type Handle = "move" | "nw" | "n" | "ne" | "e" | "se" | "s" | "sw" | "w";
 
 interface Marker {
   id: string;
@@ -55,75 +55,44 @@ const pctToY = (p: number) => (p / 100) * VB_H;
 
 const MIN_SIZE = 2; // bounds 最小宽高（百分比）
 
-/** 把 bounds 限制在 0-100 范围内，并保证最小尺寸 */
-function clampBounds(b: Bounds): Bounds {
-  let { x, y, w, h } = b;
-  // 先保证最小尺寸
-  w = Math.max(MIN_SIZE, w);
-  h = Math.max(MIN_SIZE, h);
-  // 左上越界：把超出部分截掉
-  if (x < 0) {
-    w += x;
-    x = 0;
-  }
-  if (y < 0) {
-    h += y;
-    y = 0;
-  }
-  // 右下越界：截到 100
-  if (x + w > 100) w = 100 - x;
-  if (y + h > 100) h = 100 - y;
-  // 再次保证最小尺寸（极端情况）
-  w = Math.max(MIN_SIZE, w);
-  h = Math.max(MIN_SIZE, h);
-  return { x, y, w, h };
-}
-
-/** 根据 handle 类型与指针位移计算新 bounds */
-function resizeBounds(
+/** 根据 handle 类型与指针位移计算新 bounds (锚定相反边拉伸，防止越界移位) */
+export function resizeBounds(
   start: Bounds,
   handle: Handle,
   dx: number,
   dy: number
 ): Bounds {
   let { x, y, w, h } = start;
-  switch (handle) {
-    case "move":
-      x += dx;
-      y += dy;
-      break;
-    case "nw":
-      x += dx;
-      y += dy;
-      w -= dx;
-      h -= dy;
-      break;
-    case "n":
-      y += dy;
-      h -= dy;
-      break;
-    case "ne":
-      y += dy;
-      w += dx;
-      h -= dy;
-      break;
-    case "e":
-      w += dx;
-      break;
-    case "se":
-      w += dx;
-      h += dy;
-      break;
-    case "s":
-      h += dy;
-      break;
-    case "sw":
-      x += dx;
-      w -= dx;
-      h += dy;
-      break;
+
+  // 水平拉伸：固定相对侧边缘
+  if (handle === "move") {
+    x = Math.max(0, Math.min(100 - w, x + dx));
+  } else {
+    if (handle === "nw" || handle === "w" || handle === "sw") {
+      const right = start.x + start.w;
+      x = Math.max(0, Math.min(right - MIN_SIZE, start.x + dx));
+      w = right - x;
+    }
+    if (handle === "ne" || handle === "e" || handle === "se") {
+      w = Math.max(MIN_SIZE, Math.min(100 - start.x, start.w + dx));
+    }
   }
-  return clampBounds({ x, y, w, h });
+
+  // 垂直拉伸：固定相对侧边缘
+  if (handle === "move") {
+    y = Math.max(0, Math.min(100 - h, y + dy));
+  } else {
+    if (handle === "nw" || handle === "n" || handle === "ne") {
+      const bottom = start.y + start.h;
+      y = Math.max(0, Math.min(bottom - MIN_SIZE, start.y + dy));
+      h = bottom - y;
+    }
+    if (handle === "sw" || handle === "s" || handle === "se") {
+      h = Math.max(MIN_SIZE, Math.min(100 - start.y, start.h + dy));
+    }
+  }
+
+  return { x, y, w, h };
 }
 
 export default function FloorPlan({
@@ -160,6 +129,7 @@ export default function FloorPlan({
   const dragPointerStartRef = useRef<AnchorPosition | null>(null);
   const [dragBoundsId, setDragBoundsId] = useState<string | null>(null);
   const [dragBoundsCurrent, setDragBoundsCurrent] = useState<Bounds | null>(null);
+  const dragBoundsCurrentRef = useRef<Bounds | null>(null);
 
   const isImageMode =
     !!floorPlanImage && floorPlanImage !== BUILTIN_FLOORPLAN;
@@ -217,6 +187,7 @@ export default function FloorPlan({
       dragPointerStartRef.current = p;
       setDragBoundsId(areaId);
       setDragBoundsCurrent(current);
+      dragBoundsCurrentRef.current = current;
       svgRef.current?.setPointerCapture?.(e.pointerId);
     },
     [boundsEditable, onAreaBoundsChange, toPct]
@@ -232,6 +203,7 @@ export default function FloorPlan({
         const handle = dragHandleRef.current;
         if (!p || !start || !sp || !handle) return;
         const next = resizeBounds(start, handle, p.x - sp.x, p.y - sp.y);
+        dragBoundsCurrentRef.current = next;
         setDragBoundsCurrent(next); // 仅本地 state
         return;
       }
@@ -249,7 +221,7 @@ export default function FloorPlan({
   const endDrag = useCallback(() => {
     // bounds 拖拽结束
     const bid = dragBoundsIdRef.current;
-    const bcur = dragBoundsCurrent;
+    const bcur = dragBoundsCurrentRef.current;
     if (bid && bcur && onAreaBoundsChange) {
       onAreaBoundsChange(bid, bcur); // 拖拽结束才写入 store
     }
@@ -259,6 +231,7 @@ export default function FloorPlan({
     dragPointerStartRef.current = null;
     setDragBoundsId(null);
     setDragBoundsCurrent(null);
+    dragBoundsCurrentRef.current = null;
 
     // 锚点拖拽结束
     const aid = dragIdRef.current;
@@ -270,7 +243,7 @@ export default function FloorPlan({
     dragPosRef.current = null;
     setDragId(null);
     setDragPos(null);
-  }, [onAreaMove, onAreaBoundsChange, dragBoundsCurrent]);
+  }, [onAreaMove, onAreaBoundsChange]);
 
   const areaFill = useMemo(
     () => (id: string) => (id === highlightAreaId ? "#EFD9C4" : "#FBF8F2"),

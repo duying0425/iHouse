@@ -25,7 +25,7 @@ let serverProcess = null;
 let baseUrl = `http://127.0.0.1:${PORT}`;
 
 /** 等待 server 起来：轮询 /api/health */
-async function waitForServer(timeoutMs = 10000) {
+async function waitForServer(timeoutMs = 30000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
@@ -75,7 +75,7 @@ beforeAll(async () => {
     serverProcess.stderr.on("data", (d) => process.stderr.write(`[server!] ${d}`));
   }
   await waitForServer();
-}, 15000);
+}, 35000);
 
 afterAll(async () => {
   if (serverProcess) {

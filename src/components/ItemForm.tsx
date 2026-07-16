@@ -35,25 +35,31 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
   // 新建时默认分类“家电”仍可由 AI 修正；已有档案或用户手选的分类绝不覆盖。
   const categoryCanAutofillRef = useRef(!value.name.trim());
-
   const area = areas.find((a) => a.id === areaId);
   const images = area?.images ?? [];
 
   // 新建物品时可在表单内直接选择收纳到本区域的储物单元
   const containerCandidates = useMemo(() => {
     if (!isNew || !area) return [];
+    // 仅收集本区域内已被作为容器的 id 集合，解除全局 areas 的依赖
+    const usedContainerIds = new Set(
+      area.items
+        .map((i) => i.containerItemId)
+        .filter((id): id is string => !!id)
+    );
     return area.items.filter(
       (item) =>
         item.category === "储物" ||
         (item.contents?.length ?? 0) > 0 ||
-        areas.some((a) => a.items.some((i) => i.containerItemId === item.id))
+        usedContainerIds.has(item.id)
     );
-  }, [isNew, area, areas]);
+  }, [isNew, area]);
 
   const selectedContainerItem =
     isNew && value.containerItemId
       ? area?.items.find((i) => i.id === value.containerItemId)
       : undefined;
+
   // 是否收纳于储物单元（新建时由表单选择，编辑时由 containedInName 决定）
   const effectiveContained = isNew
     ? Boolean(value.containerItemId)

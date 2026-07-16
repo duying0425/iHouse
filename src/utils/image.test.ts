@@ -2,20 +2,13 @@ import { describe, it, expect } from "vitest";
 import { imageOf } from "./image";
 
 describe("imageOf utility", () => {
-  const BASE_URL = "https://remote-pod.enterprise.trae.cn/api/ide/v1/text_to_image";
+  it("should return mapped demo image path when prompt matches a key in DEMO_IMAGE_MAP", () => {
+    const result = imageOf("入户玄关全景");
+    expect(result).toBe("/demo-images/entryway_overview.png");
+  });
 
-  it("should construct default URL with prompt and landscape_4_3 size", () => {
+  it("should return empty string as fallback when prompt has no match in DEMO_IMAGE_MAP", () => {
     const result = imageOf("modern kitchen");
-    expect(result).toBe(`${BASE_URL}?prompt=modern%20kitchen&image_size=landscape_4_3`);
-  });
-
-  it("should properly encode special characters in prompt", () => {
-    const result = imageOf("living room & dining table?");
-    expect(result).toBe(`${BASE_URL}?prompt=living%20room%20%26%20dining%20table%3F&image_size=landscape_4_3`);
-  });
-
-  it("should construct URL with custom size parameters", () => {
-    const result = imageOf("cozy bedroom", "square_hd");
-    expect(result).toBe(`${BASE_URL}?prompt=cozy%20bedroom&image_size=square_hd`);
+    expect(result).toBe("");
   });
 });

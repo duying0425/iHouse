@@ -103,8 +103,8 @@ export function finalizeTempImages(obj, imagesDir, tmpDir) {
 }
 
 function finalizeOne(str, imagesDir, tmpDir) {
-  // 仅匹配 /api/images/tmp/<name>，不误伤 /api/images/<name>
-  const m = str.match(/^\/api\/images\/tmp\/(.+)$/);
+  // 仅匹配合法的文件名（哈希+后缀），防止目录穿越
+  const m = str.match(/^\/api\/images\/tmp\/([a-zA-Z0-9_\-\.]+)$/);
   if (!m) return str;
   const filename = m[1];
   const srcPath = path.join(tmpDir, filename);
