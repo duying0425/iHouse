@@ -209,6 +209,8 @@ export default function SetupPage() {
                 图鉴标题
               </span>
               <input
+                name="homeTitle"
+                autoComplete="off"
                 value={title}
                 onChange={(e) => setHomeTitle(e.target.value)}
                 className="field"
@@ -333,6 +335,8 @@ export default function SetupPage() {
             </h3>
             <div className="flex gap-2">
               <input
+                name="newAreaName"
+                autoComplete="off"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAdd()}
@@ -399,6 +403,8 @@ export default function SetupPage() {
                         </span>
                         {editingId === a.id ? (
                           <input
+                            name="editAreaName"
+                            autoComplete="off"
                             autoFocus
                             value={editName}
                             onChange={(e) => setEditName(e.target.value)}
