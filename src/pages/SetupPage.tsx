@@ -484,6 +484,12 @@ export default function SetupPage() {
                               if (highlightAreaId === a.id) {
                                 setHighlightAreaId(null);
                               }
+                              if (expandedId === a.id) {
+                                setExpandedId(null);
+                              }
+                              if (editingId === a.id) {
+                                setEditingId(null);
+                              }
                             }
                           }}
                           className="shrink-0 text-ink/30 transition-colors hover:text-ochre"
