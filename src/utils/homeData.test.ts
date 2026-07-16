@@ -29,6 +29,19 @@ describe("normalizeHomeData", () => {
     }));
   });
 
+  it("对于已有 bounds 的区域，自动将其锚点 floorPlanPos 对齐到 bounds 的中心点", () => {
+    const home = normalizeHomeData({
+      areas: [
+        {
+          id: "room",
+          floorPlanPos: { x: 0, y: 0 },
+          bounds: { x: 10, y: 20, w: 30, h: 40 },
+        },
+      ],
+    });
+    expect(home?.areas[0].floorPlanPos).toEqual({ x: 25, y: 40 });
+  });
+
   it("非对象输入返回 null", () => {
     expect(normalizeHomeData(null)).toBeNull();
     expect(normalizeHomeData("invalid")).toBeNull();

@@ -50,6 +50,26 @@ function normalizeArea(value: unknown, index: number, total: number): Area {
   const id = typeof area.id === "string" && area.id ? area.id : `area-${index + 1}`;
   const fallbackPos = fallbackAreaPosition(index, total);
   const position = isRecord(area.floorPlanPos) ? area.floorPlanPos : {};
+  const bounds = isRecord(area.bounds)
+    ? {
+        x: finiteNumber(area.bounds.x, 0),
+        y: finiteNumber(area.bounds.y, 0),
+        w: finiteNumber(area.bounds.w, 0),
+        h: finiteNumber(area.bounds.h, 0),
+      }
+    : undefined;
+
+  let floorPlanPos = {
+    x: finiteNumber(position.x, fallbackPos.x),
+    y: finiteNumber(position.y, fallbackPos.y),
+  };
+  if (bounds) {
+    floorPlanPos = {
+      x: bounds.x + bounds.w / 2,
+      y: bounds.y + bounds.h / 2,
+    };
+  }
+
   const images = Array.isArray(area.images)
     ? area.images
         .filter(isRecord)
@@ -67,10 +87,8 @@ function normalizeArea(value: unknown, index: number, total: number): Area {
     ...area,
     id,
     name: typeof area.name === "string" && area.name ? area.name : `区域 ${index + 1}`,
-    floorPlanPos: {
-      x: finiteNumber(position.x, fallbackPos.x),
-      y: finiteNumber(position.y, fallbackPos.y),
-    },
+    floorPlanPos,
+    bounds: bounds ?? undefined,
     images,
     items,
   } as Area;
