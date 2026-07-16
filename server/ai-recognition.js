@@ -337,7 +337,7 @@ export function resolveImageDataUrl(imageValue, imagesDir) {
       throw new AiRecognitionError("图片地址无效", 400, "INVALID_IMAGE_URL");
     }
   }
-  const localMatch = pathname.match(/^\/api\/images\/([a-zA-Z0-9][a-zA-Z0-9._-]{0,199})$/);
+  const localMatch = pathname.match(/^\/api\/images\/(tmp\/)?([a-zA-Z0-9][a-zA-Z0-9._-]{0,199})$/);
   if (!localMatch) {
     throw new AiRecognitionError(
       "AI 识别仅支持刚拍摄或上传到本服务的图片，请重新上传后再试",
@@ -346,11 +346,13 @@ export function resolveImageDataUrl(imageValue, imagesDir) {
     );
   }
 
-  const filename = localMatch[1];
+  const isTmp = !!localMatch[1];
+  const filename = localMatch[2];
   const mime = mimeFromExtension(path.extname(filename));
   if (!mime) throw new AiRecognitionError("不支持该图片格式", 400, "UNSUPPORTED_IMAGE_FORMAT");
-  const filePath = path.join(imagesDir, filename);
-  if (path.dirname(filePath) !== path.resolve(imagesDir) || !fs.existsSync(filePath)) {
+  const filePath = isTmp ? path.join(imagesDir, "tmp", filename) : path.join(imagesDir, filename);
+  const expectedDir = isTmp ? path.resolve(imagesDir, "tmp") : path.resolve(imagesDir);
+  if (path.dirname(filePath) !== expectedDir || !fs.existsSync(filePath)) {
     throw new AiRecognitionError("图片文件不存在，请重新上传", 404, "IMAGE_NOT_FOUND");
   }
   const buffer = fs.readFileSync(filePath);

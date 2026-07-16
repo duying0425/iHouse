@@ -72,6 +72,10 @@ describe("AI 物品识别", () => {
     expect(resolveImageDataUrl(PIXEL_PNG, "/unused")).toBe(PIXEL_PNG);
     expect(() => resolveImageDataUrl("https://example.com/item.png", "/unused"))
       .toThrow(/仅支持刚拍摄或上传/);
+    expect(() => resolveImageDataUrl("/api/images/non-existent.png", "/unused"))
+      .toThrow(/图片文件不存在，请重新上传/);
+    expect(() => resolveImageDataUrl("/api/images/tmp/non-existent.png", "/unused"))
+      .toThrow(/图片文件不存在，请重新上传/);
   });
 
   it("支持 base URL 配置并保持默认模型", () => {
