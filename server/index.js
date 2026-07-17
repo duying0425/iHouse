@@ -480,7 +480,8 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ ok: false, error: "人机验证未完成，请重试" });
     }
     try {
-      const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      const verifyUrl = process.env.TURNSTILE_VERIFY_URL || "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+      const verifyRes = await fetch(verifyUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

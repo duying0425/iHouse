@@ -99,6 +99,7 @@ pnpm dev
 | `AI_TIMEOUT_MS` | `60000` | 单次 AI 识别超时（5000-120000 毫秒） |
 | `TURNSTILE_SITE_KEY` | 无 | 可选：Cloudflare Turnstile 站点密钥（前端显示验证组件使用） |
 | `TURNSTILE_SECRET_KEY` | 无 | 可选：Cloudflare Turnstile 机密密钥（后端校验使用） |
+| `TURNSTILE_VERIFY_URL` | `https://challenges.cloudflare.com/turnstile/v0/siteverify` | 可选：人机验证校验接口（适合国内使用反向代理/镜像） |
 
 ```bash
 # 示例：自定义端口和数据目录

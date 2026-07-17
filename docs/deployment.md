@@ -132,6 +132,10 @@ docker compose logs --tail=200 ihouse
 # Cloudflare Turnstile 人机验证
 TURNSTILE_SITE_KEY=你的站点密钥(Site Key)
 TURNSTILE_SECRET_KEY=你的机密密钥(Secret Key)
+
+# 可选：如果服务器部署在大陆等访问 Cloudflare siteverify 接口困难的环境，
+# 可以通过配置本变量使用反向代理/国内镜像接口。
+# TURNSTILE_VERIFY_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
 ```
 
 保存并使用 `docker compose up -d --force-recreate` 重启容器。重启后，前端注册界面将自动显示 Turnstile 人机验证块，后端也将开始对注册 Token 进行强校验。
