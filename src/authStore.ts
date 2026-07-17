@@ -68,7 +68,8 @@ interface AuthState {
   register: (
     username: string,
     password: string,
-    displayName?: string
+    displayName?: string,
+    turnstileToken?: string
   ) => Promise<void>;
   logout: () => Promise<void>;
   refreshHouses: () => Promise<void>;
@@ -169,11 +170,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await get().loadMe();
   },
 
-  register: async (username, password, displayName) => {
+  register: async (username, password, displayName, turnstileToken) => {
     const res = await fetch("/api/auth/register", {
       method: "POST",
       headers: authHeaders(null),
-      body: JSON.stringify({ username, password, displayName }),
+      body: JSON.stringify({ username, password, displayName, turnstileToken }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "注册失败");

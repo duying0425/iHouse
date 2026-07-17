@@ -39,6 +39,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, "..", ".env"), quiet: true });
 dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
 
+const TURNSTILE_SITE_KEY = process.env.TURNSTILE_SITE_KEY || "";
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || "";
+
 // 数据目录：可挂载为 volume 持久化
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -289,10 +292,10 @@ app.post("/api/upload", requireAuth, (req, res) => {
     if (!ALLOWED_EXTENSIONS.has(ext)) {
       return res.status(400).json({ error: "Unsupported image format" });
     }
-    if (ext.includes("+")) {
-      ext = ext.split("+")[0];
-    }
     const dataBuffer = Buffer.from(matches[2], "base64");
+    if (dataBuffer.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: "图片文件过大，限制在 10MB 以内" });
+    }
     const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
     const filename = `${hash}.${ext}`;
     const filePath = path.join(IMAGES_TMP_DIR, filename);
@@ -463,8 +466,39 @@ function canAccessHouse(houseId, userId) {
 }
 
 /* ---- 认证 ---- */
-app.post("/api/auth/register", (req, res) => {
-  const { username, password, displayName } = req.body || {};
+app.get("/api/auth/config", (_req, res) => {
+  res.json({
+    turnstileEnabled: !!(TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY),
+    turnstileSiteKey: TURNSTILE_SITE_KEY,
+  });
+});
+
+app.post("/api/auth/register", async (req, res) => {
+  const { username, password, displayName, turnstileToken } = req.body || {};
+  if (TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY) {
+    if (!turnstileToken) {
+      return res.status(400).json({ ok: false, error: "人机验证未完成，请重试" });
+    }
+    try {
+      const verifyRes = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secret: TURNSTILE_SECRET_KEY,
+          response: turnstileToken,
+          remoteip: req.ip,
+        }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        return res.status(400).json({ ok: false, error: "人机验证失败，请重试" });
+      }
+    } catch (err) {
+      console.error("Turnstile verification error:", err);
+      return res.status(500).json({ ok: false, error: "人机验证服务不可用，请稍后再试" });
+    }
+  }
+
   if (!isValidUsername(username)) {
     return res.status(400).json({ ok: false, error: "用户名格式不合法（3-32 字符，支持字母数字下划线中文）" });
   }

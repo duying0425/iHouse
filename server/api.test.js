@@ -1026,5 +1026,38 @@ describe("安全隔离与加固", () => {
     const resData = await parseJson(r);
     expect(resData.error).toMatch(/Unsupported image format|Invalid base64/);
   });
+
+  it("/api/upload 应该拒绝大于 10MB 的图片上传", async () => {
+    const registerR = await fetch(`${baseUrl}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "size_tester",
+        password: "tester-password-123",
+      }),
+    });
+    const regData = await parseJson(registerR);
+    const token = regData.token;
+
+    // 11MB image buffer
+    const largeBuffer = Buffer.alloc(11 * 1024 * 1024);
+    const largeBase64 = "data:image/png;base64," + largeBuffer.toString("base64");
+
+    const r = await authFetch("/api/upload", token, {
+      method: "POST",
+      body: JSON.stringify({ image: largeBase64 }),
+    });
+    expect(r.status).toBe(413);
+    const resData = await parseJson(r);
+    expect(resData.error).toMatch(/过大/);
+  });
+
+  it("GET /api/auth/config 应默认返回 Turnstile 未启用", async () => {
+    const r = await fetch(`${baseUrl}/api/auth/config`);
+    expect(r.status).toBe(200);
+    const data = await parseJson(r);
+    expect(data.turnstileEnabled).toBe(false);
+    expect(data.turnstileSiteKey).toBe("");
+  });
 });
 

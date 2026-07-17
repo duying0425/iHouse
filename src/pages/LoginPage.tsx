@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Home as HomeIcon, LogIn, UserPlus } from "lucide-react";
 import { useAuthStore } from "@/authStore";
@@ -16,6 +16,86 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const [turnstileConfig, setTurnstileConfig] = useState({ enabled: false, siteKey: "" });
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const turnstileContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/config")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.turnstileEnabled) {
+          setTurnstileConfig({ enabled: true, siteKey: data.turnstileSiteKey });
+        }
+      })
+      .catch((err) => console.error("获取 Turnstile 配置失败", err));
+  }, []);
+
+  useEffect(() => {
+    if (!turnstileConfig.enabled) return;
+
+    const scriptId = "cf-turnstile-script";
+    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
+    if (!script) {
+      script = document.createElement("script");
+      script.id = scriptId;
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      script.async = true;
+      script.defer = true;
+      document.body.appendChild(script);
+    }
+
+    let widgetId: any = null;
+    const renderWidget = () => {
+      const turnstile = (window as any).turnstile;
+      if (turnstile && turnstileContainerRef.current) {
+        if (widgetId !== null) {
+          try {
+            turnstile.remove(widgetId);
+          } catch (e) {
+            // ignore
+          }
+        }
+        widgetId = turnstile.render(turnstileContainerRef.current, {
+          sitekey: turnstileConfig.siteKey,
+          callback: (token: string) => {
+            setTurnstileToken(token);
+          },
+          "expired-callback": () => {
+            setTurnstileToken(null);
+          },
+          "error-callback": () => {
+            setTurnstileToken(null);
+          },
+        });
+      }
+    };
+
+    const turnstile = (window as any).turnstile;
+    if (turnstile) {
+      const timer = setTimeout(renderWidget, 100);
+      return () => {
+        clearTimeout(timer);
+        if (widgetId !== null && (window as any).turnstile) {
+          try { (window as any).turnstile.remove(widgetId); } catch (e) {}
+        }
+      };
+    } else {
+      const interval = setInterval(() => {
+        if ((window as any).turnstile) {
+          clearInterval(interval);
+          renderWidget();
+        }
+      }, 100);
+      return () => {
+        clearInterval(interval);
+        if (widgetId !== null && (window as any).turnstile) {
+          try { (window as any).turnstile.remove(widgetId); } catch (e) {}
+        }
+      };
+    }
+  }, [turnstileConfig, mode]);
+
   // 登录成功后跳转到来源页或房屋列表
   const redirectTo = (location.state as { from?: string } | null)?.from || "/houses";
 
@@ -27,11 +107,25 @@ export default function LoginPage() {
       if (mode === "login") {
         await login(username.trim(), password);
       } else {
-        await register(username.trim(), password, displayName.trim() || undefined);
+        if (turnstileConfig.enabled && !turnstileToken) {
+          setError("请先完成人机验证");
+          setBusy(false);
+          return;
+        }
+        await register(
+          username.trim(),
+          password,
+          displayName.trim() || undefined,
+          turnstileToken || undefined
+        );
       }
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
+      if (mode === "register" && turnstileConfig.enabled && (window as any).turnstile) {
+        try { (window as any).turnstile.reset(); } catch (e) {}
+        setTurnstileToken(null);
+      }
     } finally {
       setBusy(false);
     }
@@ -118,6 +212,12 @@ export default function LoginPage() {
               className="field"
             />
           </label>
+
+          {mode === "register" && turnstileConfig.enabled && (
+            <div className="flex justify-center my-2">
+              <div ref={turnstileContainerRef} />
+            </div>
+          )}
 
           {error && (
             <p className="rounded bg-ochre/10 px-3 py-2 text-2xs text-ochre">

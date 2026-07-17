@@ -53,6 +53,8 @@ function replaceBase64(str, imagesDir) {
   if (!ALLOWED_EXTENSIONS.has(ext)) return str;
 
   const dataBuffer = Buffer.from(matches[2], "base64");
+  if (dataBuffer.length > 10 * 1024 * 1024) return str;
+
   const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
   const filename = `${hash}.${ext}`;
   const filePath = path.join(imagesDir, filename);
