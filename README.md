@@ -76,6 +76,10 @@ cd server && npm ci && cd ..
 # 3. 启动后端（默认 3000 端口）
 cd server && node index.js
 
+
+# 3. 启动后端（默认 3000 端口）
+cd server && node index.js
+
 # 4. 另开终端启动前端（vite 会把 /api 代理到 3000）
 pnpm dev
 ```
@@ -93,6 +97,8 @@ pnpm dev
 | `AI_API_KEY` | 无 | AI 服务密钥，仅后端读取，不会发送到浏览器 |
 | `AI_MODEL` | `openai/gpt-5.6-sol` | 图片识别模型 ID |
 | `AI_TIMEOUT_MS` | `60000` | 单次 AI 识别超时（5000-120000 毫秒） |
+| `TURNSTILE_SITE_KEY` | 无 | 可选：Cloudflare Turnstile 站点密钥（前端显示验证组件使用） |
+| `TURNSTILE_SECRET_KEY` | 无 | 可选：Cloudflare Turnstile 机密密钥（后端校验使用） |
 
 ```bash
 # 示例：自定义端口和数据目录

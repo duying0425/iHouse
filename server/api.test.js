@@ -61,9 +61,13 @@ async function parseJson(res) {
 
 beforeAll(async () => {
   // 启动 server 子进程，使用临时数据目录
+  const testEnv = { ...process.env };
+  testEnv.TURNSTILE_SITE_KEY = "";
+  testEnv.TURNSTILE_SECRET_KEY = "";
+
   serverProcess = spawn(process.execPath, [SERVER_PATH], {
     env: {
-      ...process.env,
+      ...testEnv,
       PORT: String(PORT),
       DATA_DIR: TMP_DATA_DIR,
     },

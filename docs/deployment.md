@@ -113,6 +113,29 @@ docker compose logs --tail=200 ihouse
 
 服务端日志不会打印 Key，也不会把上游响应原文返回浏览器。
 
+## 4.5 配置 Cloudflare Turnstile 人机验证
+
+为防范公网公开部署时机器人对注册接口的暴力注册与滥用（进而消耗你的 AI API 额度），iHouse 整合了 Cloudflare Turnstile 人机验证。本功能为**按需启用**：若不配置密钥，系统默认使用传统的无感注册流程。
+
+### 4.5.1 获取 Cloudflare 密钥
+1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)，在左侧菜单栏选择 **Turnstile**。
+2. 点击 **Add Site**：
+   - **Site Name**：填 `iHouse`
+   - **Domains**：输入你的部署域名。本地测试可包含 `localhost` 或 `127.0.0.1`。
+   - **Widget Mode**：推荐选择 **Managed**。
+3. 创建后获取并记录 **Site Key（站点密钥）** 和 **Secret Key（机密密钥）**。
+
+### 4.5.2 在 .env 中启用配置
+编辑项目根目录的 `.env` 文件，加入以下变量：
+
+```env
+# Cloudflare Turnstile 人机验证
+TURNSTILE_SITE_KEY=你的站点密钥(Site Key)
+TURNSTILE_SECRET_KEY=你的机密密钥(Secret Key)
+```
+
+保存并使用 `docker compose up -d --force-recreate` 重启容器。重启后，前端注册界面将自动显示 Turnstile 人机验证块，后端也将开始对注册 Token 进行强校验。
+
 ## 5. 端口、防火墙与 HTTPS
 
 ### 5.1 直接通过局域网访问
