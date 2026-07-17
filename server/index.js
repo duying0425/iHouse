@@ -257,13 +257,20 @@ app.get("/api/health", (_req, res) => {
 });
 
 // 服务上传的图片
-app.use("/api/images", express.static(IMAGES_DIR));
+app.use("/api/images", express.static(IMAGES_DIR, {
+  setHeaders: (res) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'");
+  }
+}));
 
 // 独立上传图片接口（需登录）
 // 上传的图片先落入 tmp 子目录，URL 形如 /api/images/tmp/xxx.jpg。
 // 当用户保存物品/房屋数据（PUT /api/houses/:id/data）时，
 // finalizeTempImages 会自动把引用到的 tmp 文件复制到正式目录并把 URL 改写为
 // /api/images/xxx.jpg。未被保存引用的 tmp 文件由 cleanupTempImages 定期清理。
+const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
 app.post("/api/upload", requireAuth, (req, res) => {
   const { image } = req.body;
   if (!image) {
@@ -275,7 +282,13 @@ app.post("/api/upload", requireAuth, (req, res) => {
     if (!matches || matches.length !== 3) {
       return res.status(400).json({ error: "Invalid base64 image data" });
     }
-    let ext = matches[1];
+    let ext = matches[1].toLowerCase();
+    if (ext.includes("+")) {
+      ext = ext.split("+")[0];
+    }
+    if (!ALLOWED_EXTENSIONS.has(ext)) {
+      return res.status(400).json({ error: "Unsupported image format" });
+    }
     if (ext.includes("+")) {
       ext = ext.split("+")[0];
     }
@@ -855,6 +868,8 @@ app.post(
       if (entry.dir) continue;
       const fname = path.basename(relPath);
       if (!fname || fname.includes("..") || fname.includes("/") || fname.includes("\\")) continue;
+      const ext = path.extname(fname).toLowerCase();
+      if (!ALLOWED_EXTENSIONS.has(ext.slice(1))) continue;
       const dest = path.join(IMAGES_DIR, fname);
       const buf = await entry.async("nodebuffer");
       fs.writeFileSync(dest, buf);

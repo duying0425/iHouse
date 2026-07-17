@@ -130,6 +130,16 @@ describe("extractBase64Images", () => {
     expect(result).toBe(false);
     expect(input).toEqual(originalInput);
   });
+
+  it("should reject malicious file types (like html) in base64 data", () => {
+    const input = {
+      image1: "data:image/html;base64,PGh0bWw+PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0PjwvaHRtbD4="
+    };
+    const originalInput = JSON.parse(JSON.stringify(input));
+    const result = extractBase64Images(input, TEST_IMAGES_DIR);
+    expect(result).toBe(false);
+    expect(input).toEqual(originalInput);
+  });
 });
 
 describe("collectImageRefs", () => {

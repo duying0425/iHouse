@@ -43,11 +43,15 @@ export function extractBase64Images(obj, imagesDir) {
   return changed;
 }
 
+const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif"]);
+
 function replaceBase64(str, imagesDir) {
   const matches = str.match(/^data:image\/([a-zA-Z+0-9]+);base64,(.+)$/);
   if (!matches || matches.length !== 3) return str;
-  let ext = matches[1];
+  let ext = matches[1].toLowerCase();
   if (ext.includes("+")) ext = ext.split("+")[0];
+  if (!ALLOWED_EXTENSIONS.has(ext)) return str;
+
   const dataBuffer = Buffer.from(matches[2], "base64");
   const hash = crypto.createHash("md5").update(dataBuffer).digest("hex");
   const filename = `${hash}.${ext}`;
@@ -57,6 +61,7 @@ function replaceBase64(str, imagesDir) {
   }
   return `/api/images/${filename}`;
 }
+
 
 /**
  * 把数据中引用的 /api/images/tmp/xxx 临时图片转正为 /api/images/xxx。

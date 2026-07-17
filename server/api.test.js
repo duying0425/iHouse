@@ -994,3 +994,37 @@ describe("SPA 静态前端兜底", () => {
     expect(r.status).toBe(200);
   });
 });
+
+describe("安全隔离与加固", () => {
+  it("静态图片服务必须包含防内容嗅探(nosniff)和禁止脚本执行的 CSP 头部", async () => {
+    const r = await fetch(`${baseUrl}/api/images/non-existent.jpg`);
+    // 无论是 404 还是 200，express.static 及相关静态服务都会返回头部
+    expect(r.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(r.headers.get("content-security-policy")).toBe("default-src 'none'");
+  });
+
+  it("/api/upload 应该拒绝 HTML 格式的 base64 伪图片上传", async () => {
+    // 注册一个独立用户
+    const registerR = await fetch(`${baseUrl}/api/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: "security_tester",
+        password: "tester-password-123",
+      }),
+    });
+    const regData = await parseJson(registerR);
+    const token = regData.token;
+
+    // 尝试上传 HTML
+    const htmlBase64 = "data:image/html;base64,PGh0bWw+PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0PjwvaHRtbD4=";
+    const r = await authFetch("/api/upload", token, {
+      method: "POST",
+      body: JSON.stringify({ image: htmlBase64 }),
+    });
+    expect(r.status).toBe(400);
+    const resData = await parseJson(r);
+    expect(resData.error).toMatch(/Unsupported image format|Invalid base64/);
+  });
+});
+
