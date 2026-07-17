@@ -527,8 +527,33 @@ app.post("/api/auth/register", async (req, res) => {
   });
 });
 
-app.post("/api/auth/login", (req, res) => {
-  const { username, password } = req.body || {};
+app.post("/api/auth/login", async (req, res) => {
+  const { username, password, turnstileToken } = req.body || {};
+  if (TURNSTILE_SITE_KEY && TURNSTILE_SECRET_KEY) {
+    if (!turnstileToken) {
+      return res.status(400).json({ ok: false, error: "人机验证未完成，请重试" });
+    }
+    try {
+      const verifyUrl = process.env.TURNSTILE_VERIFY_URL || "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+      const verifyRes = await fetch(verifyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          secret: TURNSTILE_SECRET_KEY,
+          response: turnstileToken,
+          remoteip: req.ip,
+        }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        return res.status(400).json({ ok: false, error: "人机验证失败，请重试" });
+      }
+    } catch (err) {
+      console.error("Turnstile verification error:", err);
+      return res.status(500).json({ ok: false, error: "人机验证服务不可用，请稍后再试" });
+    }
+  }
+
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: "请输入用户名和密码" });
   }

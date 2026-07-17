@@ -64,7 +64,7 @@ interface AuthState {
   // 业务方法
   /** 拉取当前用户与房屋列表，返回是否仍处于已登录状态 */
   loadMe: () => Promise<boolean>;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, turnstileToken?: string) => Promise<void>;
   register: (
     username: string,
     password: string,
@@ -157,11 +157,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  login: async (username, password) => {
+  login: async (username, password, turnstileToken) => {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: authHeaders(null),
-      body: JSON.stringify({ username, password }),
+      body: JSON.stringify({ username, password, turnstileToken }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "登录失败");

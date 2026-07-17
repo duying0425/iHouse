@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Home as HomeIcon, LogIn, UserPlus } from "lucide-react";
+import { useNavigate, useLocation, Link } from "react-router-dom";
+import { Home as HomeIcon, LogIn, UserPlus, ArrowLeft } from "lucide-react";
 import { useAuthStore } from "@/authStore";
 
 type Mode = "login" | "register";
@@ -32,6 +32,7 @@ export default function LoginPage() {
   }, []);
 
   useEffect(() => {
+    setTurnstileToken(null);
     if (!turnstileConfig.enabled) return;
 
     const scriptId = "cf-turnstile-script";
@@ -105,7 +106,12 @@ export default function LoginPage() {
     setBusy(true);
     try {
       if (mode === "login") {
-        await login(username.trim(), password);
+        if (turnstileConfig.enabled && !turnstileToken) {
+          setError("请先完成人机验证");
+          setBusy(false);
+          return;
+        }
+        await login(username.trim(), password, turnstileToken || undefined);
       } else {
         if (turnstileConfig.enabled && !turnstileToken) {
           setError("请先完成人机验证");
@@ -122,7 +128,7 @@ export default function LoginPage() {
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
-      if (mode === "register" && turnstileConfig.enabled && (window as any).turnstile) {
+      if (turnstileConfig.enabled && (window as any).turnstile) {
         try { (window as any).turnstile.reset(); } catch (e) {}
         setTurnstileToken(null);
       }
@@ -213,7 +219,7 @@ export default function LoginPage() {
             />
           </label>
 
-          {mode === "register" && turnstileConfig.enabled && (
+          {turnstileConfig.enabled && (
             <div className="flex justify-center my-2">
               <div ref={turnstileContainerRef} />
             </div>
@@ -238,9 +244,17 @@ export default function LoginPage() {
           </p>
         </form>
 
-        <p className="mt-4 text-center text-2xs text-ink/35">
-          家庭内部使用 · 数据与家人共享
-        </p>
+        <div className="mt-4 flex flex-col items-center gap-2">
+          <Link
+            to="/"
+            className="flex items-center gap-1 text-xs text-clay-600 hover:text-clay-700 font-medium transition-colors"
+          >
+            <ArrowLeft size={14} /> 返回演示主页
+          </Link>
+          <p className="text-center text-2xs text-ink/35">
+            家庭内部使用 · 数据与家人共享
+          </p>
+        </div>
       </div>
     </div>
   );
