@@ -14,6 +14,7 @@ export interface ItemRecognition {
   estimatedPrice: number | null;
   confidence: number | null;
   notes: string | null;
+  contents?: Array<{ name: string; quantity?: string; remark?: string }>;
 }
 
 interface RecognitionResponse {
@@ -95,6 +96,28 @@ export function applyRecognitionToEmptyFields(
       : null,
   ].filter((part): part is string => Boolean(part?.trim()));
   fillText("remark", "备注", remarkParts.join("；"));
+
+  if (recognition.contents && recognition.contents.length > 0) {
+    const existingNames = new Set(next.contents.map(c => c.name.trim().toLowerCase()));
+    const addedEntries = recognition.contents
+      .map((c) => {
+        const name = c.name?.trim();
+        if (!name) return null;
+        if (existingNames.has(name.toLowerCase())) return null;
+        return {
+          id: `cnt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+          name,
+          quantity: c.quantity || "",
+          remark: c.remark || "",
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+
+    if (addedEntries.length > 0) {
+      next.contents = [...next.contents, ...addedEntries];
+      filled.push("内部快捷清单");
+    }
+  }
 
   return { value: next, filled };
 }

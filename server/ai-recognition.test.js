@@ -59,7 +59,7 @@ describe("AI 物品识别", () => {
     expect(ITEM_RECOGNITION_SYSTEM_PROMPT).toMatch(/iHouse 居所物品档案系统/);
     expect(ITEM_RECOGNITION_PROMPT).toMatch(/主要物品选择/);
     expect(ITEM_RECOGNITION_PROMPT).toMatch(/管线设施/);
-    expect(ITEM_RECOGNITION_PROMPT).toMatch(/必须恰好包含以下 10 个键/);
+    expect(ITEM_RECOGNITION_PROMPT).toMatch(/必须恰好包含以下 11 个键/);
   });
 
   it("正确换算普通区间和万元区间中值", () => {
@@ -131,5 +131,28 @@ describe("AI 物品识别", () => {
       type: "image_url",
       image_url: { url: PIXEL_PNG, detail: "auto" },
     });
+  });
+
+  it("正确提取并规范化储物内部快捷清单 contents", () => {
+    const result = normalizeRecognition({
+      name: "收纳柜",
+      category: "储物",
+      brand: "宜家",
+      type: "收纳柜",
+      subtype: "储物柜",
+      tags: ["置物架"],
+      spec: null,
+      estimated_price: "200-300元",
+      confidence: 0.9,
+      notes: "白色",
+      contents: [
+        { name: "螺丝刀", quantity: "2把", remark: "十字" },
+        { name: " 电池 ", qty: "5节" },
+        { name: "", quantity: "ignored" }
+      ]
+    });
+    expect(result.contents).toHaveLength(2);
+    expect(result.contents[0]).toEqual({ name: "螺丝刀", quantity: "2把", remark: "十字" });
+    expect(result.contents[1]).toEqual({ name: "电池", quantity: "5节", remark: null });
   });
 });

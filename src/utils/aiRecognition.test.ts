@@ -47,4 +47,28 @@ describe("AI 识别表单回填", () => {
     expect(result.value.remark).toBe("客厅使用");
     expect(result.filled).toEqual(["标签", "规格"]);
   });
+
+  it("如果识别结果包含 contents 且当前表单 contents 为空，则自动追加并生成 ID，不覆盖已有的同名项", () => {
+    const recognitionWithContents: ItemRecognition = {
+      ...recognition,
+      category: "储物",
+      contents: [
+        { name: "螺丝刀", quantity: "2把", remark: "十字" },
+        { name: "电池", quantity: "5节" }
+      ]
+    };
+    
+    // 假设已有 "电池" 项
+    const current = itemToFormValue({
+      contents: [{ id: "existing-1", name: "电池", quantity: "1节" }]
+    });
+
+    const result = applyRecognitionToEmptyFields(current, recognitionWithContents, false);
+    expect(result.value.contents).toHaveLength(2); // existing 电池 + new 螺丝刀
+    expect(result.value.contents[0]).toMatchObject({ id: "existing-1", name: "电池", quantity: "1节" });
+    expect(result.value.contents[1].name).toBe("螺丝刀");
+    expect(result.value.contents[1].quantity).toBe("2把");
+    expect(result.value.contents[1].id).toMatch(/^cnt-/);
+    expect(result.filled).toContain("内部快捷清单");
+  });
 });

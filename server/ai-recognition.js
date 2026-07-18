@@ -35,15 +35,16 @@ export const ITEM_RECOGNITION_PROMPT = [
   "- brand：仅当 logo、包装或铭牌文字可见，或品牌标识具有高度唯一性时填写；不能仅凭外形或颜色猜品牌。",
   '- type：通用品类名称，例如“电风扇”“沙发”“洗衣液”。',
   '- subtype：能可靠判断时填写更细子类，例如“落地扇”“布艺三人沙发”；否则为 null。',
-  "- tags：最多 5 个有检索价值的中文别名；不得放入品牌、颜色、材质描述、营销词或与 name 完全相同的词。",
-  "- spec：仅填写图片文字或结构能明确确认的型号、容量、尺寸、功率等；把多个规格合并成简短字符串，不能确认则为 null。",
+  "- tags: 最多 5 个有检索价值的中文别名；不得放入品牌、颜色、材质描述、营销词或与 name 完全相同的词。",
+  "- spec: 仅填写图片文字或结构能明确确认的型号、容量、尺寸、功率等；把多个规格合并成简短字符串，不能确认则为 null。",
   '- estimated_price：按中国大陆常见新品零售价保守估算，只能输出“最低整数-最高整数元”的区间，最低值不得高于最高值；古董、定制品、无法判断品类或差异过大时为 null。',
   "- confidence：0 到 1 的数字，表示对主要物品名称与品类判断的总体把握，不代表品牌置信度。",
   "- notes：不超过 80 个中文字符，只记录关键可见特征、多物品歧义或不确定项；不要重复其他字段，不要声称看到了实际不可见的信息。",
+  '- contents：仅当主要物品为储物类（如抽屉、收纳箱、鞋柜、衣柜、置物架等，或敞开的冰箱），且其内部装载/陈列的物品在图片中清晰可见时填写。返回一个数组，数组元素为对象，结构如：{"name": "物品名称", "quantity": "数量，无则为 null", "remark": "备注/规格，无则为 null"}。如果不是此类物品或内部物品不可见，则必须为 []。',
   "",
   "【输出协议】",
-  "必须恰好包含以下 10 个键，不得增删键；未知字符串字段使用 null，tags 未知时使用 []：",
-  '{"name":null,"category":null,"brand":null,"type":null,"subtype":null,"tags":[],"spec":null,"estimated_price":null,"confidence":0,"notes":null}',
+  "必须恰好包含以下 11 个键，不得增删键；未知字符串字段使用 null，列表未知时使用 []：",
+  '{"name":null,"category":null,"brand":null,"type":null,"subtype":null,"tags":[],"spec":null,"estimated_price":null,"confidence":0,"notes":null,"contents":[]}',
   "输出的第一个字符必须是 {，最后一个字符必须是 }。",
 ].join("\n");
 
@@ -146,6 +147,20 @@ export function normalizeRecognition(rawValue) {
     .filter((tag) => tag && tag !== name && tag !== brand && tag !== category))]
     .slice(0, 5);
 
+  const rawContents = Array.isArray(raw.contents) ? raw.contents : [];
+  const contents = rawContents
+    .map((c) => {
+      if (!c || typeof c !== "object") return null;
+      const contentName = textOrNull(c.name, 100);
+      if (!contentName) return null;
+      return {
+        name: contentName,
+        quantity: textOrNull(c.quantity ?? c.qty, 50),
+        remark: textOrNull(c.remark, 100),
+      };
+    })
+    .filter(Boolean);
+
   return {
     name,
     category,
@@ -158,6 +173,7 @@ export function normalizeRecognition(rawValue) {
     estimatedPrice: estimatedPriceMidpoint(estimatedPriceRange),
     confidence,
     notes,
+    contents,
   };
 }
 
