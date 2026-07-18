@@ -31,6 +31,8 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
   const [touched, setTouched] = useState(false);
   const [pasteHint, setPasteHint] = useState<string | null>(null);
   const [recognizing, setRecognizing] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [galleryUploadingCount, setGalleryUploadingCount] = useState(0);
   const [aiNotice, setAiNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
@@ -123,6 +125,7 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
 
   const handleFile = async (file?: File) => {
     if (!file) return;
+    setUploading(true);
     let base64Url = "";
     try {
       base64Url = await compressImage(file, 1200, 0.82);
@@ -135,10 +138,14 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
       });
     }
 
-    // 异步上传到服务器，成功后存储服务器返回的 URL，失败则回退使用本地 Base64 兜底
-    const finalUrl = await uploadImage(base64Url);
-    setAiNotice(null);
-    set("image", finalUrl);
+    try {
+      // 异步上传到服务器，成功后存储服务器返回 of URL，失败则回退使用本地 Base64 兜底
+      const finalUrl = await uploadImage(base64Url);
+      setAiNotice(null);
+      set("image", finalUrl);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleAiRecognition = async () => {
@@ -210,7 +217,7 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
       {/* 左：照片 */}
       <div className="space-y-4">
         <div className="card overflow-hidden">
-          <div className="bg-clay-50">
+          <div className="bg-clay-50 relative">
             {value.image ? (
               <img
                 src={value.image}
@@ -224,6 +231,12 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
                 <span className="text-2xs text-ink/35">
                   可上传、粘贴（Ctrl+V）或粘贴 URL
                 </span>
+              </div>
+            )}
+            {uploading && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-paper/60 backdrop-blur-2xs">
+                <LoaderCircle size={24} className="animate-spin text-clay-500 mb-2" />
+                <span className="text-xs text-ink/75 font-medium">图片上传中…</span>
               </div>
             )}
           </div>
@@ -362,7 +375,7 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
               (如保修卡、发票、参数铭牌等)
             </span>
           </h4>
-          {value.gallery.length === 0 ? (
+          {value.gallery.length === 0 && galleryUploadingCount === 0 ? (
             <p className="py-4 text-center text-2xs text-ink/40 border border-dashed border-line rounded">
               暂无附属图片，可在下方上传
             </p>
@@ -383,6 +396,12 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
                   </button>
                 </div>
               ))}
+              {Array.from({ length: galleryUploadingCount }).map((_, idx) => (
+                <div key={`uploading-${idx}`} className="relative aspect-[4/3] rounded border border-dashed border-line flex flex-col items-center justify-center bg-clay-50/50">
+                  <LoaderCircle className="animate-spin text-clay-400 mb-1" size={16} />
+                  <span className="text-3xs text-ink/45">上传中…</span>
+                </div>
+              ))}
             </div>
           )}
           <input
@@ -395,21 +414,27 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
               const files = e.target.files;
               if (!files || files.length === 0) return;
               const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+              if (list.length === 0) return;
               
-              const base64Urls = await Promise.all(
-                list.map((f) => compressImage(f, 1200, 0.82).catch(() => null))
-              );
-              
-              const finalUrls = await Promise.all(
-                base64Urls.map(async (url) => {
-                  if (!url) return null;
-                  return uploadImage(url);
-                })
-              );
-              
-              const validUrls = finalUrls.filter((url): url is string => !!url);
-              if (validUrls.length > 0) {
-                set("gallery", [...value.gallery, ...validUrls]);
+              setGalleryUploadingCount(list.length);
+              try {
+                const base64Urls = await Promise.all(
+                  list.map((f) => compressImage(f, 1200, 0.82).catch(() => null))
+                );
+                
+                const finalUrls = await Promise.all(
+                  base64Urls.map(async (url) => {
+                    if (!url) return null;
+                    return uploadImage(url);
+                  })
+                );
+                
+                const validUrls = finalUrls.filter((url): url is string => !!url);
+                if (validUrls.length > 0) {
+                  set("gallery", [...value.gallery, ...validUrls]);
+                }
+              } finally {
+                setGalleryUploadingCount(0);
               }
               if (e.target) e.target.value = "";
             }}
@@ -423,12 +448,15 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
             onChange={async (e) => {
               const file = e.target.files?.[0];
               if (!file) return;
+              setGalleryUploadingCount(1);
               try {
                 const base64Url = await compressImage(file, 1200, 0.82);
                 const finalUrl = await uploadImage(base64Url);
                 set("gallery", [...value.gallery, finalUrl]);
               } catch {
                 /* 忽略单张失败 */
+              } finally {
+                setGalleryUploadingCount(0);
               }
               if (e.target) e.target.value = "";
             }}

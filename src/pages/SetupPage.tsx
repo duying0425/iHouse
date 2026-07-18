@@ -57,6 +57,7 @@ export default function SetupPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [importHint, setImportHint] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadingFloorPlan, setUploadingFloorPlan] = useState(false);
   const [editMode, setEditMode] = useState<"all" | string | null>(null);
   const [highlightAreaId, setHighlightAreaId] = useState<string | null>(null);
   const currentHouseId = useAuthStore((s) => s.currentHouseId);
@@ -122,6 +123,7 @@ export default function SetupPage() {
 
   const handleUpload = async (file?: File) => {
     if (!file) return;
+    setUploadingFloorPlan(true);
     let base64Url = "";
     try {
       base64Url = await compressImage(file, 2000, 0.85);
@@ -134,8 +136,12 @@ export default function SetupPage() {
       });
     }
 
-    const finalUrl = await uploadImage(base64Url);
-    setFloorPlanImage(finalUrl);
+    try {
+      const finalUrl = await uploadImage(base64Url);
+      setFloorPlanImage(finalUrl);
+    } finally {
+      setUploadingFloorPlan(false);
+    }
   };
 
   const handleAdd = () => {
@@ -288,7 +294,7 @@ export default function SetupPage() {
               </div>
             </div>
 
-            <div className="p-4">
+            <div className="p-4 relative">
               {hasAreas || isImageMode ? (
                 <FloorPlan
                   areas={areas}
@@ -314,6 +320,12 @@ export default function SetupPage() {
                     </button>
                   }
                 />
+              )}
+              {uploadingFloorPlan && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-paper/60 backdrop-blur-2xs">
+                  <Loader2 className="animate-spin text-clay-500 mb-2" size={32} />
+                  <span className="text-xs text-ink/75 font-medium">户型图上传中…</span>
+                </div>
               )}
               <p className="mt-3 text-2xs text-ink/45">
                 {editMode
@@ -716,6 +728,7 @@ function AreaImagesEditor({
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const [uploadingCount, setUploadingCount] = useState(0);
 
   // 支持一次选择多个文件，全部压缩完并上传后再按原始顺序添加（避免异步乱序）
   const handleFiles = async (files: FileList | null) => {
@@ -724,22 +737,27 @@ function AreaImagesEditor({
     if (list.length === 0) return;
     const baseIdx = images.length;
 
-    // 并行压缩，但按输入顺序等待全部完成
-    const base64Urls = await Promise.all(
-      list.map((f) => compressImage(f, 1600, 0.82).catch(() => null))
-    );
+    setUploadingCount(list.length);
+    try {
+      // 并行压缩，但按输入顺序等待全部完成
+      const base64Urls = await Promise.all(
+        list.map((f) => compressImage(f, 1600, 0.82).catch(() => null))
+      );
 
-    // 并行上传这些图片，若失败则用原 base64 兜底
-    const finalUrls = await Promise.all(
-      base64Urls.map(async (url) => {
-        if (!url) return null;
-        return uploadImage(url);
-      })
-    );
+      // 并行上传这些图片，若失败则用原 base64 兜底
+      const finalUrls = await Promise.all(
+        base64Urls.map(async (url) => {
+          if (!url) return null;
+          return uploadImage(url);
+        })
+      );
 
-    finalUrls.forEach((url, i) => {
-      if (url) onAdd({ url, label: `图 ${baseIdx + i + 1}` });
-    });
+      finalUrls.forEach((url, i) => {
+        if (url) onAdd({ url, label: `图 ${baseIdx + i + 1}` });
+      });
+    } finally {
+      setUploadingCount(0);
+    }
   };
 
   return (
@@ -767,7 +785,7 @@ function AreaImagesEditor({
           if (e.target) e.target.value = "";
         }}
       />
-      {images.length === 0 ? (
+      {images.length === 0 && uploadingCount === 0 ? (
         <p className="py-3 text-center text-2xs text-ink/45">
           暂无图片，请上传区域图（可多选）
         </p>
@@ -796,6 +814,17 @@ function AreaImagesEditor({
               >
                 <Trash2 size={13} />
               </button>
+            </li>
+          ))}
+          {Array.from({ length: uploadingCount }).map((_, idx) => (
+            <li
+              key={`uploading-${idx}`}
+              className="flex items-center gap-2 rounded border border-dashed border-line bg-clay-50/50 p-1.5"
+            >
+              <div className="h-10 w-14 shrink-0 rounded bg-clay-100/50 flex items-center justify-center">
+                <Loader2 size={14} className="animate-spin text-clay-400" />
+              </div>
+              <span className="text-2xs text-ink/45">区域图上传中…</span>
             </li>
           ))}
         </ul>
