@@ -33,6 +33,7 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
   const [recognizing, setRecognizing] = useState(false);
   const [aiNotice, setAiNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
   // 新建时默认分类“家电”仍可由 AI 修正；已有档案或用户手选的分类绝不覆盖。
   const categoryCanAutofillRef = useRef(!value.name.trim());
   const area = areas.find((a) => a.id === areaId);
@@ -83,14 +84,27 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [images.length, value.areaImageId, effectiveContained]);
 
+  // 自动将焦点放到新增加的一行的名称填入框
+  useEffect(() => {
+    if (justAddedId) {
+      const el = document.getElementById(`content-name-${justAddedId}`);
+      if (el) {
+        el.focus();
+        setJustAddedId(null);
+      }
+    }
+  }, [justAddedId, value.contents]);
+
   const set = <K extends keyof ItemFormValue>(k: K, v: ItemFormValue[K]) =>
     onChange({ ...valueRef.current, [k]: v });
 
   // 储物单元内部快捷清单操作
   const addContent = () => {
-    const entry: StorageEntry = { id: genId("cnt"), name: "", quantity: "", remark: "" };
+    const id = genId("cnt");
+    const entry: StorageEntry = { id, name: "", quantity: "", remark: "" };
     onChange({ ...valueRef.current, contents: [...valueRef.current.contents, entry] });
     setContentsOpen(true);
+    setJustAddedId(id);
   };
   const updateContent = (id: string, patch: Partial<StorageEntry>) => {
     onChange({
@@ -668,6 +682,7 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
               {value.contents.map((c) => (
                 <div key={c.id} className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                   <input
+                    id={`content-name-${c.id}`}
                     value={c.name}
                     onChange={(e) => updateContent(c.id, { name: e.target.value })}
                     placeholder="物品名称（如：电池）"

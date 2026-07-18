@@ -53,6 +53,11 @@ export default function ItemDetailPage() {
 
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState<ItemFormValue>(itemToFormValue(found));
+
+  const startEditing = () => {
+    setValue(itemToFormValue(found));
+    setEditing(true);
+  };
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [linkingExisting, setLinkingExisting] = useState(false);
   const [linkItemId, setLinkItemId] = useState("");
@@ -319,7 +324,7 @@ export default function ItemDetailPage() {
               </div>
             )}
             {promoteLocation && (
-              <LocationCard item={found} image={locationImage} onEdit={() => setEditing(true)} />
+              <LocationCard item={found} image={locationImage} onEdit={startEditing} />
             )}
           </div>}
 
@@ -352,7 +357,7 @@ export default function ItemDetailPage() {
                 )}
               </div>
               <div className="flex shrink-0 gap-1.5">
-                <button onClick={() => setEditing(true)} className="btn-secondary">
+                <button onClick={startEditing} className="btn-secondary">
                   <Pencil size={15} /> 编辑
                 </button>
                 <button
@@ -386,7 +391,7 @@ export default function ItemDetailPage() {
                   </span>
                 )}
                 <button
-                  onClick={() => setEditing(true)}
+                  onClick={startEditing}
                   className="ml-auto text-2xs underline-offset-2 hover:underline"
                 >
                   去更新
@@ -680,7 +685,7 @@ export default function ItemDetailPage() {
 
             {/* 直接位于区域内时才显示区域图定位 */}
             {!found.containerItemId && !promoteLocation && (
-              <LocationCard item={found} image={locationImage} onEdit={() => setEditing(true)} />
+              <LocationCard item={found} image={locationImage} onEdit={startEditing} />
             )}
           </div>
         </div>
