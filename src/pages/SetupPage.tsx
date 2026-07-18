@@ -348,7 +348,7 @@ export default function SetupPage() {
             <div className="flex gap-2">
               <input
                 name="newAreaName"
-                autoComplete="off"
+                autoComplete="one-time-code"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAdd()}
@@ -672,6 +672,15 @@ function AccountSecurityCard() {
         当前账号：<span className="text-ink/70">{user?.username}</span>
       </p>
       <div className="space-y-2">
+        {/* 隐藏的用户名文本框，用于吸收浏览器密码管理器自动填充，防止污染其他页面的普通文本输入框 */}
+        <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          value={user?.username || ""}
+          readOnly
+          className="hidden"
+        />
         <input
           type="password"
           placeholder="当前密码"
