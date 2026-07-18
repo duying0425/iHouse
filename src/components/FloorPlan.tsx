@@ -56,6 +56,7 @@ const pctToY = (p: number) => (p / 100) * VB_H;
 const MIN_SIZE = 2; // bounds 最小宽高（百分比）
 
 /** 根据 handle 类型与指针位移计算新 bounds (锚定相反边拉伸，防止越界移位) */
+// eslint-disable-next-line react-refresh/only-export-components
 export function resizeBounds(
   start: Bounds,
   handle: Handle,

@@ -1,6 +1,6 @@
 # iHouse · 居所图鉴 — 技术架构文档
 
-> 版本：v3 · 最后更新：2026-07-16
+> 版本：v3 · 最后更新：2026-07-19
 
 ## 1. 总体架构
 
@@ -40,13 +40,23 @@ server/data/images/
 - **Tailwind CSS**：样式，暖色调（cream/ink/clay）自定义主题
 - **zustand + persist 中间件**：状态管理 + 持久化
 - **React Router**：路由
+
+## 2. 技术栈
+
+### 前端
+- **React 18 + TypeScript**：UI 框架
+- **Vite**：构建工具，dev server 代理 `/api` 到 3000 端口
+- **Tailwind CSS**：样式，暖色调（cream/ink/clay）自定义主题
+- **zustand + persist 中间件**：状态管理 + 持久化
+- **React Router**：路由
 - **window.print() + @media print CSS**：PDF 导出（原生打印方案）
 
 ### 后端
 - **Node.js 20 + Express**：HTTP 服务
 - **better-sqlite3**：同步 SQLite 驱动，WAL 模式提升并发
 - `server/index.js` 路由层
-- `server/auth.js`：鉴权模块（scrypt 密码哈希、token 生成与校验、分享码、用户名/密码格式校验、`createAuthMiddleware` 中间件工厂）
+- `server/auth.js`：鉴权模块（scrypt 密码哈希、token 生成与校验、分享码、用户名/密码格式校验、`createAuthMiddleware` 中间件工厂）。
+- `server/index.js` 中的 Cloudflare Turnstile 验证：当环境配置了 `TURNSTILE_SITE_KEY` 与 `TURNSTILE_SECRET_KEY` 时，在登录与注册接口自动启用人机验证，调用上游 `TURNSTILE_VERIFY_URL` 验证 Token。
 - `server/utils.js`：Base64 提取、`collectImageRefs` 图片引用收集工具（含单元测试）
 - `server/query.js`：结构化查询纯函数模块（含单元测试），未来 AI 工具可直接复用
 - `server/ai-recognition.js`：iHouse 识别提示协议、Chat Completions 调用、图片安全读取、返回解析与确定性规范化
@@ -187,7 +197,8 @@ zustand + persist 中间件，关键点：
 
 **第一层：前端纯函数单元测试**
 - `src/utils/compressImage.ts` / `upload.ts` / `maintenance.ts`（24 用例）/ `homeData.ts`（3 用例，残缺数据规范化）
-- `src/utils/aiRecognition.test.ts`：AI 响应字段映射、仅空字段回填与已有内容保护
+- `src/utils/aiRecognition.test.ts`：AI 响应字段映射、仅空字段回填与已有内容保护。
+- `src/components/itemFormValue.test.ts`：物品表单值初始映射与内容清单 `normalizeContents` 数据预处理逻辑测试。
 - `src/serverStorage.test.ts` 跨房屋缓存隔离
 - `src/components/export/exportModel.test.ts` 导出页模型与小册子拼版
 - `src/lib/cn.test.ts` 类名合并
@@ -198,13 +209,14 @@ zustand + persist 中间件，关键点：
 - `server/auth.test.js`（30 用例）：密码 scrypt 哈希/校验、token 生成与过期、分享码（去混淆字符集）、houseId、用户名/密码格式校验、`createAuthMiddleware` 中间件 6 种分支（无头/格式错/token 不存在/过期删除/有效/大小写）
 - `server/ai-recognition.test.js`：专用提示协议、Chat Completions 图片结构、未知值/分类/标签/置信度/价格规范化、图片 URL 安全与环境变量解析
 
-**第三层：端到端 API 集成测试**（`server/api.test.js`，59 用例）
-- 用 `mkdtempSync` 创建临时数据目录 + 随机端口启动真实 server 子进程
-- `beforeAll` 轮询 `/api/health` 等待就绪，`afterAll` SIGTERM 清理 + 删除临时目录
-- 覆盖完整业务流：注册 → 登录 → 建房 → 写数据 → 查询 → 加入审批 → 备份往返 → 修改密码 → 登出
-- 权限隔离：非成员读他人房屋 403、非 admin 不能导入备份 403、不能移除最后一个 admin 400、重复申请 409
-- 备份往返一致性：导出 zip → FormData 上传回导入接口 → 读取数据验证完全一致
-- 设 `DEBUG_SERVER=1` 环境变量可查看 server 子进程日志便于排查
+**第三层：端到端 API 集成测试**（`server/api.test.js`、`server/api-turnstile.test.js`，共 76 用例）
+- 用 `mkdtempSync` 创建临时数据目录 + 随机端口启动真实 server 子进程。
+- `beforeAll` 轮询 `/api/health` 等待就绪，`afterAll` SIGTERM 清理 + 删除临时目录。
+- **业务集成覆盖**：注册 → 登录 → 建房 → 写数据 → 查询 → 加入审批 → 备份往返 → 修改密码 → 登出。
+- **人机验证覆盖**（`api-turnstile.test.js`）：通过本地 Mock Turnstile 响应服务，验证在启用人机验证时，注册和登录接口对于 Token 缺失、Token 非法、Token 合法时的各种响应码与流程。
+- 权限隔离：非成员读他人房屋 403、非 admin 不能导入备份 403、不能移除最后一个 admin 400、重复申请 409。
+- 备份往返一致性：导出 zip → FormData 上传回导入接口 → 读取数据验证完全一致。
+- 设 `DEBUG_SERVER=1` 环境变量可查看 server 子进程日志便于排查。
 
 **运行方式**：
 
@@ -212,10 +224,11 @@ zustand + persist 中间件，关键点：
 pnpm test                                    # 全部测试
 pnpm test server/auth.test.js                # 仅鉴权单元测试
 pnpm test server/api.test.js                 # 仅 API 集成测试
+pnpm test server/api-turnstile.test.js       # 仅人机验证集成测试
 $env:DEBUG_SERVER=1; pnpm test server/api.test.js   # 带 server 日志
 ```
 
-**当前规模**：14 个测试文件、200+ 个用例；AI 相关逻辑与原有 HTTP 链路均纳入回归测试。
+**当前规模**：18 个测试文件、275+ 个用例；AI 相关逻辑、人机验证与原有 HTTP 链路均纳入回归测试。
 
 ## 4. 项目结构
 
@@ -257,7 +270,8 @@ iHouse/
 │   ├── utils.test.js             # utils.js 测试（12 用例）
 │   ├── query.test.js             # query.js 测试（34 用例）
 │   ├── auth.test.js              # auth.js 测试（30 用例）
-│   ├── api.test.js               # 端到端 API 集成测试（59 用例）
+│   ├── api.test.js               # 端到端 API 集成测试（69 用例）
+│   ├── api-turnstile.test.js     # 人机验证集成测试（7 用例）
 │   ├── ai-recognition.test.js    # AI 服务端单元测试
 │   ├── package.json
 │   └── data/                     # SQLite 数据库 + 图片文件（.gitignore）

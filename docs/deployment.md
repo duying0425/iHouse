@@ -1,7 +1,7 @@
 # iHouse 服务器部署手册
 
 > 适用版本：v3（含 AI 图片识别）
-> 最后更新：2026-07-16
+> 最后更新：2026-07-19
 > 推荐方式：Docker Compose，从本地源码构建
 
 本文覆盖 Linux 服务器、家庭 NAS 和 Synology Container Manager 的首次部署、AI 配置、HTTPS、升级、备份恢复与排障。项目根目录的 `docker-compose.yml` 是唯一推荐的生产编排入口。
@@ -115,7 +115,7 @@ docker compose logs --tail=200 ihouse
 
 ## 4.5 配置 Cloudflare Turnstile 人机验证
 
-为防范公网公开部署时机器人对注册接口的暴力注册与滥用（进而消耗你的 AI API 额度），iHouse 整合了 Cloudflare Turnstile 人机验证。本功能为**按需启用**：若不配置密钥，系统默认使用传统的无感注册流程。
+为防范公网公开部署时机器人对注册接口的暴力注册与滥用，以及登录接口的暴力破解（进而消耗你的 AI API 额度并可能威胁隐私），iHouse 整合了 Cloudflare Turnstile 人机验证。本功能为**按需启用**：若不配置密钥，系统默认使用传统的无感登录与注册流程。
 
 ### 4.5.1 获取 Cloudflare 密钥
 1. 登录 [Cloudflare 控制台](https://dash.cloudflare.com/)，在左侧菜单栏选择 **Turnstile**。
@@ -138,7 +138,7 @@ TURNSTILE_SECRET_KEY=你的机密密钥(Secret Key)
 # TURNSTILE_VERIFY_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
 ```
 
-保存并使用 `docker compose up -d --force-recreate` 重启容器。重启后，前端注册界面将自动显示 Turnstile 人机验证块，后端也将开始对注册 Token 进行强校验。
+保存并使用 `docker compose up -d --force-recreate` 重启容器。重启后，前端注册与登录界面将自动显示 Turnstile 人机验证块，后端也将开始对注册与登录 Token 进行强校验。
 
 ## 5. 端口、防火墙与 HTTPS
 

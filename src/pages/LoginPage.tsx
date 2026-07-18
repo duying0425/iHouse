@@ -5,6 +5,20 @@ import { useAuthStore } from "@/authStore";
 
 type Mode = "login" | "register";
 
+interface TurnstileObject {
+  render: (
+    container: HTMLElement,
+    options: {
+      sitekey: string;
+      callback: (token: string) => void;
+      "expired-callback"?: () => void;
+      "error-callback"?: () => void;
+    }
+  ) => string;
+  remove: (widgetId: string) => void;
+  reset: () => void;
+}
+
 export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -46,14 +60,14 @@ export default function LoginPage() {
       document.body.appendChild(script);
     }
 
-    let widgetId: any = null;
+    let widgetId: string | null = null;
     const renderWidget = () => {
-      const turnstile = (window as any).turnstile;
+      const turnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
       if (turnstile && turnstileContainerRef.current) {
         if (widgetId !== null) {
           try {
             turnstile.remove(widgetId);
-          } catch (e) {
+          } catch {
             // ignore
           }
         }
@@ -72,26 +86,36 @@ export default function LoginPage() {
       }
     };
 
-    const turnstile = (window as any).turnstile;
+    const turnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
     if (turnstile) {
       const timer = setTimeout(renderWidget, 100);
       return () => {
         clearTimeout(timer);
-        if (widgetId !== null && (window as any).turnstile) {
-          try { (window as any).turnstile.remove(widgetId); } catch (e) {}
+        if (widgetId !== null && turnstile) {
+          try {
+            turnstile.remove(widgetId);
+          } catch {
+            // ignore
+          }
         }
       };
     } else {
       const interval = setInterval(() => {
-        if ((window as any).turnstile) {
+        const turnstileLoop = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
+        if (turnstileLoop) {
           clearInterval(interval);
           renderWidget();
         }
       }, 100);
       return () => {
         clearInterval(interval);
-        if (widgetId !== null && (window as any).turnstile) {
-          try { (window as any).turnstile.remove(widgetId); } catch (e) {}
+        const turnstileCleanup = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
+        if (widgetId !== null && turnstileCleanup) {
+          try {
+            turnstileCleanup.remove(widgetId);
+          } catch {
+            // ignore
+          }
         }
       };
     }
@@ -128,8 +152,13 @@ export default function LoginPage() {
       navigate(redirectTo, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "操作失败");
-      if (turnstileConfig.enabled && (window as any).turnstile) {
-        try { (window as any).turnstile.reset(); } catch (e) {}
+      const turnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
+      if (turnstileConfig.enabled && turnstile) {
+        try {
+          turnstile.reset();
+        } catch {
+          // ignore
+        }
         setTurnstileToken(null);
       }
     } finally {
