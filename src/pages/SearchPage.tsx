@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpDown, MapPin, Plus, Search as SearchIcon, X } from "lucide-react";
+import { ArrowUpDown, MapPin, Plus, Search as SearchIcon, X, LayoutGrid, List } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import FloorPlan from "@/components/FloorPlan";
 import ItemCard from "@/components/ItemCard";
@@ -22,6 +22,14 @@ export default function SearchPage() {
   const [brands, setBrands] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<SortBy>("name");
   const [activeId, setActiveId] = useState<string | undefined>();
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    return (localStorage.getItem("ihouse_area_view_mode") as "grid" | "list") || "grid";
+  });
+
+  const handleViewModeChange = (mode: "grid" | "list") => {
+    setViewMode(mode);
+    localStorage.setItem("ihouse_area_view_mode", mode);
+  };
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -174,10 +182,41 @@ export default function SearchPage() {
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.5fr_1fr]">
         {/* 结果列表 */}
         <div>
-          <div className="mb-3 flex items-baseline justify-between">
-            <h2 className="font-serif text-lg font-semibold text-ink">
-              检索结果
-            </h2>
+          <div className="mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="font-serif text-lg font-semibold text-ink">
+                检索结果
+              </h2>
+              {/* 视图切换按钮组 */}
+              <div className="flex items-center gap-1 rounded bg-clay-50/50 p-0.5 border border-line/60 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange("grid")}
+                  className={cn(
+                    "p-1 rounded transition-all",
+                    viewMode === "grid"
+                      ? "bg-paper text-clay-700 shadow-2xs"
+                      : "text-ink/45 hover:text-ink"
+                  )}
+                  title="网格视图"
+                >
+                  <LayoutGrid size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleViewModeChange("list")}
+                  className={cn(
+                    "p-1 rounded transition-all",
+                    viewMode === "list"
+                      ? "bg-paper text-clay-700 shadow-2xs"
+                      : "text-ink/45 hover:text-ink"
+                  )}
+                  title="列表视图"
+                >
+                  <List size={13} />
+                </button>
+              </div>
+            </div>
             <span className="text-2xs text-ink/50">
               共 <span className="font-display text-clay-500">{results.length}</span> 件命中
             </span>
@@ -195,28 +234,55 @@ export default function SearchPage() {
               }
             />
           ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-              {results.map((r) => (
-                <div
-                  key={r.item.id}
-                  onMouseEnter={() => setActiveId(r.item.id)}
-                  onMouseLeave={() => setActiveId(undefined)}
-                >
-                  <ItemCard
-                    item={r.item}
-                    areaName={r.area.name}
-                    containerName={
-                      r.item.containerItemId
-                        ? areas
-                            .flatMap((area) => area.items)
-                            .find((item) => item.id === r.item.containerItemId)?.name
-                        : undefined
-                    }
-                    highlighted={activeId === r.item.id}
-                  />
-                </div>
-              ))}
-            </div>
+            viewMode === "grid" ? (
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                {results.map((r) => (
+                  <div
+                    key={r.item.id}
+                    onMouseEnter={() => setActiveId(r.item.id)}
+                    onMouseLeave={() => setActiveId(undefined)}
+                  >
+                    <ItemCard
+                      item={r.item}
+                      areaName={r.area.name}
+                      viewMode="grid"
+                      containerName={
+                        r.item.containerItemId
+                          ? areas
+                              .flatMap((area) => area.items)
+                              .find((item) => item.id === r.item.containerItemId)?.name
+                          : undefined
+                      }
+                      highlighted={activeId === r.item.id}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {results.map((r) => (
+                  <div
+                    key={r.item.id}
+                    onMouseEnter={() => setActiveId(r.item.id)}
+                    onMouseLeave={() => setActiveId(undefined)}
+                  >
+                    <ItemCard
+                      item={r.item}
+                      areaName={r.area.name}
+                      viewMode="list"
+                      containerName={
+                        r.item.containerItemId
+                          ? areas
+                              .flatMap((area) => area.items)
+                              .find((item) => item.id === r.item.containerItemId)?.name
+                          : undefined
+                      }
+                      highlighted={activeId === r.item.id}
+                    />
+                  </div>
+                ))}
+              </div>
+            )
           )}
         </div>
 

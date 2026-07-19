@@ -49,3 +49,10 @@ export function imageOf(prompt: string, _size: ImageSize = "landscape_4_3"): str
   // 由于远程接口不可达，返回空字串使前端能够立即渲染精美的分类占位图
   return "";
 }
+
+/** 识别是否为演示环境下生成的不可达占位图 URL */
+export function isMockImage(url?: string): boolean {
+  if (!url) return true;
+  return url.includes("remote-pod.enterprise.trae.cn") || url.includes("text_to_image");
+}
+

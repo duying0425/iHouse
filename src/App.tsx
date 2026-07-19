@@ -5,6 +5,7 @@ import {
   Route,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import { LogIn, X } from "lucide-react";
 import HomePage from "@/pages/HomePage";
@@ -19,6 +20,16 @@ import HousesPage from "@/pages/HousesPage";
 import HouseSettingsPage from "@/pages/HouseSettingsPage";
 import { useHomeStore } from "@/store";
 import { useAuthStore } from "@/authStore";
+
+function ScrollToTop() {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
+
+  return null;
+}
 
 export default function App() {
   const hasHydrated = useHomeStore((s) => s._hasHydrated);
@@ -64,6 +75,7 @@ export default function App() {
   if (!user) {
     return (
       <Router>
+        <ScrollToTop />
         <DemoBanner />
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -87,6 +99,7 @@ export default function App() {
   if (!currentHouseId) {
     return (
       <Router>
+        <ScrollToTop />
         <Routes>
           <Route path="/houses" element={<HousesPage />} />
           <Route path="/houses/:id/settings" element={<HouseSettingsPage />} />
@@ -105,6 +118,7 @@ export default function App() {
   // 5. 正常渲染：所有业务路由
   return (
     <Router>
+      <ScrollToTop />
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/setup" element={<SetupPage />} />

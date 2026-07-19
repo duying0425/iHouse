@@ -23,6 +23,7 @@ import EmptyState from "@/components/Empty";
 import { useHomeStore } from "@/store";
 import { CATEGORY_COLOR, type AreaImage, type Item } from "@/types";
 import SafeImage from "@/components/SafeImage";
+import { isMockImage } from "@/utils/image";
 import {
   getMaintenanceStatus,
   MAINTENANCE_STATUS_COLOR,
@@ -204,9 +205,10 @@ export default function ItemDetailPage() {
   const locationImage =
     area.images.find((image) => image.id === found.areaImageId) ?? area.images[0];
   const hasLocationVisual = Boolean(found.areaImagePos && locationImage);
+  const hasItemImage = Boolean(found.image) && !isMockImage(found.image);
   const hasGallery = Boolean(found.gallery?.length);
-  const hasMediaColumn = Boolean(found.image || hasGallery || hasLocationVisual);
-  const promoteLocation = !found.image && hasLocationVisual;
+  const hasMediaColumn = Boolean(hasItemImage || hasGallery || hasLocationVisual);
+  const promoteLocation = !hasItemImage && hasLocationVisual;
   const locationPath = getItemLocationPath(areas, found.id);
   const locationTrail = getItemLocationTrail(areas, found.id);
 
@@ -282,7 +284,7 @@ export default function ItemDetailPage() {
         <div className={hasMediaColumn ? "grid gap-6 lg:grid-cols-[1fr_1.1fr] lg:gap-8" : "mx-auto max-w-4xl"}>
           {/* 左：照片与相册 */}
           {hasMediaColumn && <div className="space-y-4">
-            {found.image && (
+            {hasItemImage && (
               <div className="card overflow-hidden">
                 <div className="relative aspect-[4/3] bg-clay-50">
                   <SafeImage

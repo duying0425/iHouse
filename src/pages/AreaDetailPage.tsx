@@ -7,6 +7,8 @@ import {
   Plus,
   Search as SearchIcon,
   X,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import AreaImageCanvas from "@/components/AreaImageCanvas";
@@ -22,6 +24,14 @@ export default function AreaDetailPage() {
   const [kw, setKw] = useState("");
   const [hoverId, setHoverId] = useState<string | undefined>();
   const [activeImageId, setActiveImageId] = useState<string | undefined>();
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    return (localStorage.getItem("ihouse_area_view_mode") as "grid" | "list") || "grid";
+  });
+
+  const handleViewModeChange = (mode: "grid" | "list") => {
+    setViewMode(mode);
+    localStorage.setItem("ihouse_area_view_mode", mode);
+  };
 
   const area = useMemo(() => areas.find((a) => a.id === areaId), [areas, areaId]);
   const areaIndex = useMemo(
@@ -219,6 +229,36 @@ export default function AreaDetailPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            {/* 视图切换按钮组 */}
+            <div className="flex items-center gap-1 rounded bg-clay-50/50 p-0.5 border border-line/60 shrink-0">
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("grid")}
+                className={cn(
+                  "p-1.5 rounded transition-all",
+                  viewMode === "grid"
+                    ? "bg-paper text-clay-700 shadow-2xs"
+                    : "text-ink/45 hover:text-ink"
+                )}
+                title="网格视图"
+              >
+                <LayoutGrid size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => handleViewModeChange("list")}
+                className={cn(
+                  "p-1.5 rounded transition-all",
+                  viewMode === "list"
+                    ? "bg-paper text-clay-700 shadow-2xs"
+                    : "text-ink/45 hover:text-ink"
+                )}
+                title="列表视图"
+              >
+                <List size={14} />
+              </button>
+            </div>
+
             <div className="relative">
               <SearchIcon
                 size={15}
@@ -260,7 +300,7 @@ export default function AreaDetailPage() {
               )
             }
           />
-        ) : (
+        ) : viewMode === "grid" ? (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {filteredItems.map((item) => (
               <div
@@ -276,6 +316,34 @@ export default function AreaDetailPage() {
               >
                 <ItemCard
                   item={item}
+                  viewMode="grid"
+                  containerName={
+                    item.containerItemId
+                      ? area.items.find((candidate) => candidate.id === item.containerItemId)?.name
+                      : undefined
+                  }
+                  highlighted={hoverId === item.id}
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {filteredItems.map((item) => (
+              <div
+                key={item.id}
+                onMouseEnter={() => {
+                  setHoverId(item.id);
+                  // 联动：若物品标在别的图上，切换到那张图
+                  if (item.areaImageId && item.areaImageId !== currentImage?.id) {
+                    setActiveImageId(item.areaImageId);
+                  }
+                }}
+                onMouseLeave={() => setHoverId(undefined)}
+              >
+                <ItemCard
+                  item={item}
+                  viewMode="list"
                   containerName={
                     item.containerItemId
                       ? area.items.find((candidate) => candidate.id === item.containerItemId)?.name

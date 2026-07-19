@@ -32,10 +32,20 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
   const [pasteHint, setPasteHint] = useState<string | null>(null);
   const [recognizing, setRecognizing] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [imageLoading, setImageLoading] = useState(false);
   const [galleryUploadingCount, setGalleryUploadingCount] = useState(0);
   const [aiNotice, setAiNotice] = useState<{ kind: "success" | "error"; message: string } | null>(null);
   const [contentsOpen, setContentsOpen] = useState(value.contents.length > 0);
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
+
+  // 监控 value.image 变化以显示载入状态
+  useEffect(() => {
+    if (value.image) {
+      setImageLoading(true);
+    } else {
+      setImageLoading(false);
+    }
+  }, [value.image]);
   // 新建时默认分类“家电”仍可由 AI 修正；已有档案或用户手选的分类绝不覆盖。
   const categoryCanAutofillRef = useRef(!value.name.trim());
   const area = areas.find((a) => a.id === areaId);
@@ -140,7 +150,11 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
 
     try {
       // 异步上传到服务器，成功后存储服务器返回 of URL，失败则回退使用本地 Base64 兜底
-      const finalUrl = await uploadImage(base64Url);
+      // 使用 Promise.all 保证上传中状态至少显示 600ms，优化网络过快时的视觉反馈
+      const [finalUrl] = await Promise.all([
+        uploadImage(base64Url),
+        new Promise((resolve) => setTimeout(resolve, 600)),
+      ]);
       setAiNotice(null);
       set("image", finalUrl);
     } finally {
@@ -217,26 +231,37 @@ export default function ItemForm({ value, onChange, areaId, containedInName, isN
       {/* 左：照片 */}
       <div className="space-y-4">
         <div className="card overflow-hidden">
-          <div className="bg-clay-50 relative">
+          <div className="bg-clay-50 relative overflow-hidden rounded-t-lg">
             {value.image ? (
               <img
                 src={value.image}
                 alt="物品照片"
-                className="block h-auto w-full object-contain"
+                className={cn(
+                  "block h-auto w-full object-contain transition-opacity duration-300",
+                  imageLoading ? "opacity-0" : "opacity-100"
+                )}
+                onLoad={() => setImageLoading(false)}
+                onError={() => setImageLoading(false)}
               />
             ) : (
-              <div className="flex aspect-[4/3] flex-col items-center justify-center gap-2 text-ink/40">
-                <ImagePlus size={32} />
-                <span className="text-xs">尚未添加照片</span>
-                <span className="text-2xs text-ink/35">
-                  可上传、粘贴（Ctrl+V）或粘贴 URL
+              <div
+                onClick={() => fileRef.current?.click()}
+                className="flex h-32 w-full cursor-pointer flex-col items-center justify-center gap-1.5 bg-clay-50/60 text-ink/40 hover:bg-clay-50 hover:text-clay-500 transition-all duration-200 border-2 border-dashed border-clay-200/60 rounded-t-lg"
+                title="点击上传图片"
+              >
+                <ImagePlus size={24} className="text-clay-400" />
+                <span className="text-xs font-semibold">尚未添加照片 (点击上传)</span>
+                <span className="text-3xs text-ink/35">
+                  支持点击上传、粘贴图片(Ctrl+V)或拍照
                 </span>
               </div>
             )}
-            {uploading && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-paper/60 backdrop-blur-2xs">
-                <LoaderCircle size={24} className="animate-spin text-clay-500 mb-2" />
-                <span className="text-xs text-ink/75 font-medium">图片上传中…</span>
+            {(uploading || imageLoading) && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-paper/65 backdrop-blur-2xs animate-fadeIn">
+                <LoaderCircle size={24} className="animate-spin text-clay-500 mb-1.5" />
+                <span className="text-xs text-ink/75 font-medium">
+                  {uploading ? "图片上传中…" : "图像载入中…"}
+                </span>
               </div>
             )}
           </div>

@@ -3,11 +3,13 @@ import { Tv, Sofa, Box, Palette, Wrench, HelpCircle, Loader2 } from "lucide-reac
 import type { Category } from "@/types";
 import { CATEGORY_COLOR } from "@/types";
 import { cn } from "@/lib/utils";
+import { isMockImage } from "@/utils/image";
 
 interface SafeImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   category: Category;
   src?: string;
   fallbackClassName?: string;
+  compact?: boolean;
 }
 
 export default function SafeImage({
@@ -18,9 +20,11 @@ export default function SafeImage({
   alt = "image",
   onLoad,
   onError,
+  compact = false,
   ...props
 }: SafeImageProps) {
-  const [status, setStatus] = useState<"loading" | "loaded" | "error">(src ? "loading" : "error");
+  const isMock = isMockImage(src);
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">(src && !isMock ? "loading" : "error");
   const imageRef = useRef<HTMLImageElement>(null);
   const loadingTimeoutRef = useRef<number | null>(null);
 
@@ -30,8 +34,9 @@ export default function SafeImage({
       window.clearTimeout(loadingTimeoutRef.current);
       loadingTimeoutRef.current = null;
     }
-    setStatus(src ? "loading" : "error");
-    if (!src) return;
+    const isMock = isMockImage(src);
+    setStatus(src && !isMock ? "loading" : "error");
+    if (!src || isMock) return;
     // 缓存图片可能在 effect 执行前就已完成载入，避免错过 load 事件后误判超时。
     if (imageRef.current?.complete) {
       setStatus(imageRef.current.naturalWidth > 0 ? "loaded" : "error");
@@ -46,7 +51,7 @@ export default function SafeImage({
       } else {
         setStatus("error");
       }
-    }, 10_000);
+    }, 3_000);
     return () => {
       if (loadingTimeoutRef.current !== null) {
         window.clearTimeout(loadingTimeoutRef.current);
@@ -59,8 +64,9 @@ export default function SafeImage({
 
   const renderFallback = () => {
     const iconProps = {
-      size: 28,
-      className: "text-cream/90 transition-transform group-hover:scale-110 duration-300",
+      size: compact ? 16 : 28,
+      style: { color: color },
+      className: "transition-transform group-hover:scale-110 duration-300",
     };
 
     let Icon = HelpCircle;
@@ -77,18 +83,23 @@ export default function SafeImage({
           fallbackClassName
         )}
         style={{
-          background: `linear-gradient(135deg, ${color}dd, ${color})`,
+          background: `linear-gradient(135deg, ${color}10, ${color}20)`,
         }}
       >
         <Icon {...iconProps} />
-        <span className="text-[10px] tracking-wider text-cream/70 select-none">
-          {category}
-        </span>
+        {!compact && (
+          <span
+            className="text-[10px] font-medium tracking-wider select-none animate-fadeIn"
+            style={{ color: color }}
+          >
+            {category}
+          </span>
+        )}
       </div>
     );
   };
 
-  if (status === "error" || !src) {
+  if (status === "error" || !src || isMockImage(src)) {
     return renderFallback();
   }
 
