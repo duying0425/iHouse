@@ -175,13 +175,21 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
         body: JSON.stringify({ query: textToSend, houseId: currentHouseId }),
       });
 
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "请求失败");
+      let resData: any = {};
+      try {
+        resData = await response.json();
+      } catch {
+        // 防止解析 HTML/非 JSON 错误响应时报错
       }
 
-      const resData = await response.json();
+      if (!response.ok) {
+        throw new Error(resData.error || `请求失败 (HTTP ${response.status})`);
+      }
+
       const aiResponse = resData.result;
+      if (!aiResponse) {
+        throw new Error("AI 助手响应数据格式不正确");
+      }
 
       const matchedItems = resolveMatchedItems(aiResponse.matchedItemIds);
 
