@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, X, Loader2, ArrowRight } from "lucide-react";
+import { Mic, MicOff, Send, Volume2, VolumeX, Sparkles, X, Loader2, ArrowRight, ChevronLeft } from "lucide-react";
 import { useAuthStore, authFetch } from "@/authStore";
 import { useHomeStore } from "@/store";
 import type { Item } from "@/types";
@@ -72,6 +72,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
   const [inputText, setInputText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isTtsEnabled, setIsTtsEnabled] = useState(() => {
     return localStorage.getItem("ihouse_tts_enabled") !== "false";
   });
@@ -82,40 +83,48 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
 
   // 初始化语音识别
   const SpeechRecognition =
-    (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    typeof window !== "undefined"
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      : null;
   const isRecognitionSupported = !!SpeechRecognition;
 
+  const isSecure = typeof window !== "undefined" && window.isSecureContext;
+  const isLocalhost =
+    typeof window !== "undefined" &&
+    (window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1");
+  const showSecurityWarning = !isSecure && !isLocalhost;
+
+  // 组件卸载时清理录音资源
   useEffect(() => {
-    if (isRecognitionSupported) {
-      const rec = new SpeechRecognition();
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.lang = "zh-CN";
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+    };
+  }, []);
 
-      rec.onstart = () => {
-        setIsRecording(true);
-      };
-
-      rec.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        if (transcript) {
-          setInputText(transcript);
-          handleSendQuery(transcript, true);
-        }
-      };
-
-      rec.onerror = (event: any) => {
-        console.error("语音识别错误:", event.error);
-        setIsRecording(false);
-      };
-
-      rec.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current = rec;
+  // 在关闭助手面板时进行清理
+  useEffect(() => {
+    if (!isOpen) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+      setIsRecording(false);
+      setErrorMsg(null);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
     }
-  }, [isRecognitionSupported]);
+  }, [isOpen]);
 
   // 对话滚动置底
   useEffect(() => {
@@ -264,6 +273,71 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
     }
   };
 
+  const startSpeechRecognition = () => {
+    if (!SpeechRecognition) return;
+
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.abort();
+      } catch (e) {}
+      recognitionRef.current = null;
+    }
+
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "zh-CN";
+
+    rec.onstart = () => {
+      setIsRecording(true);
+      setErrorMsg(null);
+    };
+
+    rec.onresult = (event: any) => {
+      const transcript = event.results[0]?.[0]?.transcript;
+      if (transcript) {
+        setInputText(transcript);
+        handleSendQuery(transcript, true);
+      }
+    };
+
+    rec.onerror = (event: any) => {
+      console.error("语音识别错误:", event.error);
+      setIsRecording(false);
+
+      let msg = "语音识别发生错误";
+      if (event.error === "not-allowed") {
+        msg = "麦克风访问被拒绝，请检查浏览器或操作系统设置。";
+      } else if (event.error === "service-not-allowed") {
+        msg = "语音服务未允许，移动端浏览器可能需要安全的 HTTPS 连接，或需要启用系统的语音听写功能。";
+      } else if (event.error === "no-speech") {
+        msg = "未检测到说话声音，请靠近麦克风再试一次。";
+      } else if (event.error === "network") {
+        msg = "语音识别网络连接失败，请检查网络。";
+      } else if (event.error !== "aborted") {
+        msg = `语音识别错误: ${event.error}`;
+      }
+
+      if (event.error !== "aborted") {
+        setErrorMsg(msg);
+      }
+    };
+
+    rec.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = rec;
+
+    try {
+      rec.start();
+    } catch (err: any) {
+      console.error("启动语音识别失败:", err);
+      setErrorMsg(`启动失败: ${err.message || err}`);
+      setIsRecording(false);
+    }
+  };
+
   const handleMicClick = () => {
     if (!isRecognitionSupported) {
       alert("当前浏览器不支持原生语音转文字，请手动输入文字进行提问。");
@@ -282,7 +356,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
         window.speechSynthesis.cancel();
       }
 
-      recognitionRef.current?.start();
+      startSpeechRecognition();
     }
   };
 
@@ -304,24 +378,31 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-50 flex justify-end bg-ink/30 backdrop-blur-sm animate-fadeIn h-[100dvh] overflow-hidden">
       {/* 遮罩关闭 */}
       <div className="absolute inset-0" onClick={onClose} />
 
       {/* 助手面板 */}
-      <div className="relative flex h-full w-full max-w-md flex-col border-l border-line bg-paper shadow-2xl animate-slideLeft">
+      <div className="relative flex md:h-full h-[100dvh] w-full max-w-md flex-col border-l border-line bg-paper shadow-2xl animate-slideLeft">
         {/* 头部 */}
-        <header className="flex h-16 items-center justify-between border-b border-line px-4 bg-cream/30">
+        <header className="flex min-h-[4rem] h-auto items-center justify-between border-b border-line px-4 bg-cream/30 pt-[env(safe-area-inset-top)]">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded bg-clay-500 text-cream">
+            <button
+              onClick={onClose}
+              className="flex h-8 w-8 items-center justify-center rounded text-ink/60 hover:bg-clay-100/50 hover:text-ink md:hidden transition-colors mr-1"
+              title="返回"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <span className="flex h-8 w-8 items-center justify-center rounded bg-clay-500 text-cream shrink-0">
               <Sparkles size={16} className="animate-pulse" />
             </span>
-            <div>
-              <h2 className="font-serif text-sm font-semibold text-ink">智能查找助理</h2>
-              <p className="text-3xs text-ink/40">语音询问 · 大模型纠错匹配</p>
+            <div className="min-w-0">
+              <h2 className="font-serif text-sm font-semibold text-ink truncate">智能查找助理</h2>
+              <p className="text-3xs text-ink/40 truncate">语音询问 · 大模型纠错匹配</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={toggleTts}
               title={isTtsEnabled ? "关闭语音播报" : "开启语音播报"}
@@ -343,6 +424,12 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
 
         {/* 消息历史 */}
         <main className="flex-1 overflow-y-auto p-4 space-y-4 bg-cream/10">
+          {showSecurityWarning && (
+            <div className="rounded bg-clay-50/70 border border-clay-200 p-3.5 text-xs text-clay-800 leading-relaxed shadow-sm mb-2">
+              <span className="font-semibold text-clay-700">⚠️ 安全连接提示：</span>
+              当前访问未使用安全连接 (HTTPS)。在移动设备上，浏览器通常出于隐私保护会禁用非 HTTPS 网站的麦克风与语音功能。若语音输入异常，请改用安全连接访问。
+            </div>
+          )}
           {messages.map((msg) => (
             <div
               key={msg.id}
@@ -406,7 +493,23 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
         </main>
 
         {/* 底部输入栏 */}
-        <footer className="border-t border-line p-3 bg-paper">
+        <footer className="border-t border-line p-3 bg-paper pb-[calc(env(safe-area-inset-bottom)+0.75rem)]">
+          {/* 语音识别错误提示 */}
+          {errorMsg && (
+            <div className="mb-3 flex items-center justify-between rounded bg-red-50/80 border border-red-200 p-3 text-xs text-red-700 animate-fadeIn">
+              <div className="flex items-center gap-1.5">
+                <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 shrink-0 animate-pulse" />
+                <span>{errorMsg}</span>
+              </div>
+              <button
+                onClick={() => setErrorMsg(null)}
+                className="text-2xs font-semibold text-red-500 hover:text-red-700 shrink-0 ml-2"
+              >
+                忽略
+              </button>
+            </div>
+          )}
+
           {/* 麦克风录音中展示 */}
           {isRecording && (
             <div className="mb-3 flex items-center justify-between rounded-lg bg-clay-50 border border-clay-200 p-3 text-sm text-clay-700 animate-pulse">
