@@ -59,7 +59,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
         const transcript = event.results[0][0].transcript;
         if (transcript) {
           setInputText(transcript);
-          handleSendQuery(transcript);
+          handleSendQuery(transcript, true);
         }
       };
 
@@ -155,7 +155,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
   };
 
   // 发送查询到 AI 助手
-  const handleSendQuery = async (queryText: string) => {
+  const handleSendQuery = async (queryText: string, isVoice = false) => {
     const textToSend = queryText.trim();
     if (!textToSend || isLoading) return;
 
@@ -196,8 +196,10 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
         },
       ]);
 
-      // 自动播放 AI 回复
-      playSpeech(aiResponse.answer);
+      // 仅在是语音查询，且全局语音播放开启时才自动播报
+      if (isVoice) {
+        playSpeech(aiResponse.answer);
+      }
     } catch (error: any) {
       console.error("AI 助手发生错误:", error);
       setMessages((prev) => [
@@ -300,16 +302,27 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
                 msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start"
               )}
             >
-              {/* 气泡 */}
-              <div
-                className={cn(
-                  "p-3 rounded-lg text-sm shadow-sm leading-relaxed",
-                  msg.role === "user"
-                    ? "bg-clay-500 text-cream rounded-br-none"
-                    : "bg-paper border border-line text-ink rounded-bl-none"
+              {/* 气泡与手动朗读按钮 */}
+              <div className="flex items-center gap-1.5 max-w-full">
+                <div
+                  className={cn(
+                    "p-3 rounded-lg text-sm shadow-sm leading-relaxed",
+                    msg.role === "user"
+                      ? "bg-clay-500 text-cream rounded-br-none"
+                      : "bg-paper border border-line text-ink rounded-bl-none"
+                  )}
+                >
+                  {msg.text}
+                </div>
+                {msg.role === "assistant" && (
+                  <button
+                    onClick={() => playSpeech(msg.text)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-ink/30 hover:text-clay-500 hover:bg-clay-100/50 transition-colors"
+                    title="朗读此条回复"
+                  >
+                    <Volume2 size={13} />
+                  </button>
                 )}
-              >
-                {msg.text}
               </div>
 
               {/* 命中物品展示 */}
@@ -380,7 +393,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleSendQuery(inputText);
+                handleSendQuery(inputText, false);
               }}
               className="flex flex-1 items-center gap-2"
             >
