@@ -4,6 +4,8 @@ import { ArrowRight, Boxes, Download, Search, Settings, Sparkles, AlertTriangle,
 import TopBar from "@/components/TopBar";
 import FloorPlan from "@/components/FloorPlan";
 import { useHomeStore } from "@/store";
+import { useAuthStore } from "@/authStore";
+import VoiceAssistant from "@/components/VoiceAssistant";
 import { countItems } from "@/data/seed";
 import { CATEGORIES, CATEGORY_COLOR, type Area, type Item } from "@/types";
 import {
@@ -23,8 +25,10 @@ interface AlertEntry {
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const { title, subtitle, areas, floorPlanImage } = useHomeStore();
   const [hoverArea, setHoverArea] = useState<string | undefined>();
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   const totalItems = useMemo(() => countItems(areas), [areas]);
   const totalAreas = areas.length;
@@ -276,6 +280,23 @@ export default function HomePage() {
           </div>
         </div>
       </main>
+
+      {/* 智能语音查找助手悬浮入口 */}
+      {user && (
+        <>
+          <button
+            onClick={() => setIsAssistantOpen(true)}
+            title="语音智能查找"
+            className="fixed bottom-6 right-6 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-clay-500 text-cream shadow-lg hover:bg-clay-600 hover:-translate-y-1 transition-all focus:outline-none"
+          >
+            <Sparkles size={24} className="animate-pulse" />
+          </button>
+          <VoiceAssistant
+            isOpen={isAssistantOpen}
+            onClose={() => setIsAssistantOpen(false)}
+          />
+        </>
+      )}
     </div>
   );
 }

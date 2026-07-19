@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpDown, MapPin, Plus, Search as SearchIcon, X, LayoutGrid, List } from "lucide-react";
+import { ArrowUpDown, MapPin, Plus, Search as SearchIcon, X, LayoutGrid, List, Mic } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
+import { useAuthStore } from "@/authStore";
+import VoiceAssistant from "@/components/VoiceAssistant";
 import FloorPlan from "@/components/FloorPlan";
 import ItemCard from "@/components/ItemCard";
 import EmptyState from "@/components/Empty";
@@ -13,8 +15,10 @@ import { cn } from "@/lib/utils";
 type SortBy = "name" | "purchaseDate" | "price";
 
 export default function SearchPage() {
+  const { user } = useAuthStore();
   const { areas, search, allBrands, floorPlanImage } = useHomeStore();
   const setLastSearch = useUiStore((s) => s.setLastSearch);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
 
   const [keyword, setKeyword] = useState("");
   const [areaIds, setAreaIds] = useState<string[]>([]);
@@ -89,13 +93,23 @@ export default function SearchPage() {
             placeholder="搜索物品名称、品牌、规格、备注、储物单元内部物品……"
             className="w-full border-b-0 border border-line bg-cream py-3 pl-11 pr-10 text-base text-ink placeholder:text-ink/35 focus:border-clay-400 focus:outline-none rounded"
           />
-          {keyword && (
+          {keyword ? (
             <button
               onClick={() => setKeyword("")}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-ink"
             >
               <X size={16} />
             </button>
+          ) : (
+            user && (
+              <button
+                onClick={() => setIsAssistantOpen(true)}
+                title="智能语音查找"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-clay-500 hover:text-clay-600 transition-colors"
+              >
+                <Mic size={18} />
+              </button>
+            )
           )}
         </div>
 
@@ -313,6 +327,11 @@ export default function SearchPage() {
           </div>
         </div>
       </div>
+
+      <VoiceAssistant
+        isOpen={isAssistantOpen}
+        onClose={() => setIsAssistantOpen(false)}
+      />
     </PageLayout>
   );
 }

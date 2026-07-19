@@ -7,12 +7,15 @@ import crypto from "crypto";
 import JSZip from "jszip";
 import multer from "multer";
 import dotenv from "dotenv";
+import { Readable } from "stream";
 import { extractBase64Images, collectImageRefs, finalizeTempImages, cleanupTempImages } from "./utils.js";
 import {
   AiRecognitionError,
   recognizeItemFromImage,
   resolveImageDataUrl,
 } from "./ai-recognition.js";
+import { runAssistant } from "./ai-assistant.js";
+import { synthesizeSpeech, getTtsConfig } from "./ai-tts.js";
 import {
   buildSummary,
   listAreas,
@@ -336,6 +339,93 @@ app.post("/api/ai/recognize-item", requireAuth, async (req, res) => {
       ok: false,
       error: "AI 识别失败，请稍后重试",
       code: "AI_RECOGNITION_FAILED",
+    });
+  }
+});
+
+// 智能查找助理接口。根据用户自然语言查找请求及物品位置简表，返回智能分析结果。
+app.post("/api/ai/assistant", requireAuth, async (req, res) => {
+  try {
+    const { query, houseId } = req.body || {};
+    if (!query || typeof query !== "string" || !query.trim()) {
+      return res.status(400).json({ ok: false, error: "提问内容不能为空" });
+    }
+    if (!houseId || typeof houseId !== "string" || !houseId.trim()) {
+      return res.status(400).json({ ok: false, error: "缺少 houseId" });
+    }
+    if (!canAccessHouse(houseId, req.user.id)) {
+      return res.status(403).json({ ok: false, error: "无权访问该房屋" });
+    }
+
+    const row = db
+      .prepare("SELECT data FROM houses WHERE id = ?")
+      .get(houseId);
+    if (!row || !row.data) {
+      return res.status(404).json({ ok: false, error: "未找到房屋数据" });
+    }
+
+    let home;
+    try {
+      home = JSON.parse(row.data);
+    } catch {
+      return res.status(500).json({ ok: false, error: "解析房屋数据失败" });
+    }
+
+    // 拼装全屋位置简表
+    const locationsResult = listLocations(home);
+    const locations = locationsResult.locations || [];
+
+    const result = await runAssistant(query, locations);
+    return res.json({ ok: true, result });
+  } catch (error) {
+    if (error instanceof AiRecognitionError) {
+      if (error.status >= 500) {
+        console.error(`[AI assistant] ${error.code}: ${error.message}`);
+      }
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+    console.error("[AI assistant] 未预期错误:", error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || "AI 助手检索失败，请稍后重试",
+      code: "AI_ASSISTANT_FAILED",
+    });
+  }
+});
+
+// TTS 语音合成代理接口。将文字发往配置的 TTS (如 VoxCPM) 服务，并流式传输回前端。
+app.post("/api/ai/tts", requireAuth, async (req, res) => {
+  try {
+    const { text } = req.body || {};
+    if (!text || typeof text !== "string" || !text.trim()) {
+      return res.status(400).json({ ok: false, error: "文本内容不能为空" });
+    }
+
+    const config = getTtsConfig();
+    if (!config) {
+      return res.status(404).json({
+        ok: false,
+        error: "TTS 语音服务未配置，将在客户端执行本地朗读",
+        code: "TTS_NOT_CONFIGURED",
+      });
+    }
+
+    const { stream, contentType } = await synthesizeSpeech(text, { config });
+    res.setHeader("Content-Type", contentType);
+
+    // 将 Web ReadableStream 转换为 Node.js Readable 并通过 pipe 流式返回
+    const readable = Readable.fromWeb(stream);
+    readable.pipe(res);
+  } catch (error) {
+    console.error("[AI TTS] 语音合成失败:", error);
+    return res.status(500).json({
+      ok: false,
+      error: error.message || "语音合成失败，请稍后重试",
+      code: "TTS_FAILED",
     });
   }
 });
