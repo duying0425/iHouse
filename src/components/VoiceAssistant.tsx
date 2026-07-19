@@ -6,6 +6,47 @@ import type { Item } from "@/types";
 import ItemCard from "@/components/ItemCard";
 import { cn } from "@/lib/utils";
 
+// 解析简单的 Markdown 格式（粗体、换行、无序列表）
+function renderMarkdown(text: string) {
+  const lines = text.split("\n");
+  return lines.map((line, lineIdx) => {
+    let currentLine = line;
+    let isListItem = false;
+
+    if (line.trim().startsWith("- ") || line.trim().startsWith("* ")) {
+      isListItem = true;
+      currentLine = line.trim().substring(2);
+    }
+
+    const parts = currentLine.split(/(\*\*.*?\*\*)/g);
+    const content = parts.map((part, partIdx) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return (
+          <strong key={partIdx} className="font-semibold">
+            {part.slice(2, -2)}
+          </strong>
+        );
+      }
+      return part;
+    });
+
+    if (isListItem) {
+      return (
+        <div key={lineIdx} className="flex items-start gap-1.5 pl-2 mt-1">
+          <span className="text-ink/40 mt-1.5 h-1.5 w-1.5 rounded-full bg-ink/30 shrink-0" />
+          <span className="flex-1">{content}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div key={lineIdx} className={lineIdx > 0 ? "min-h-[1rem]" : ""}>
+        {content}
+      </div>
+    );
+  });
+}
+
 interface Message {
   id: string;
   role: "user" | "assistant";
@@ -320,7 +361,7 @@ export default function VoiceAssistant({ isOpen, onClose }: VoiceAssistantProps)
                       : "bg-paper border border-line text-ink rounded-bl-none"
                   )}
                 >
-                  {msg.text}
+                  {msg.role === "user" ? msg.text : renderMarkdown(msg.text)}
                 </div>
                 {msg.role === "assistant" && (
                   <button
