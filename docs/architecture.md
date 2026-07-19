@@ -60,6 +60,8 @@ server/data/images/
 - `server/utils.js`：Base64 提取、`collectImageRefs` 图片引用收集工具（含单元测试）
 - `server/query.js`：结构化查询纯函数模块（含单元测试），未来 AI 工具可直接复用
 - `server/ai-recognition.js`：iHouse 识别提示协议、Chat Completions 调用、图片安全读取、返回解析与确定性规范化
+- `server/ai-assistant.js`：语音智能查找助理，整合物品位置索引并通过 LLM 实现模糊匹配与智能纠错，自带思考链清理与文本兜底机制
+- `server/ai-tts.js`：语音合成（TTS）接口，实现 OpenAI 音频合成接口规范的代理转发（如 VoxCPM），并自动兼容浏览器本地发音
 - **dotenv**：本地开发从根目录 `.env` 读取 AI 配置；生产由 Docker Compose 注入环境变量
 
 ### 部署
@@ -267,12 +269,15 @@ iHouse/
 │   ├── utils.js                  # Base64 提取、图片引用收集工具
 │   ├── query.js                  # 结构化查询纯函数（summary/areas/items/locations）
 │   ├── ai-recognition.js         # AI 提示协议、上游调用、校验与规范化
+│   ├── ai-assistant.js           # 语音智能查找助理，整合清单并调用大模型
+│   ├── ai-tts.js                 # 语音合成代理转发模块 (如对接 VoxCPM)
 │   ├── utils.test.js             # utils.js 测试（12 用例）
 │   ├── query.test.js             # query.js 测试（34 用例）
 │   ├── auth.test.js              # auth.js 测试（30 用例）
 │   ├── api.test.js               # 端到端 API 集成测试（69 用例）
 │   ├── api-turnstile.test.js     # 人机验证集成测试（7 用例）
 │   ├── ai-recognition.test.js    # AI 服务端单元测试
+│   ├── ai-assistant.test.js      # 智能助理与语音代理服务端测试 (7 用例)
 │   ├── package.json
 │   └── data/                     # SQLite 数据库 + 图片文件（.gitignore）
 ├── docs/                         # 文档

@@ -133,6 +133,8 @@ AI_MODEL=openai/gpt-5.6-sol
 | PUT | `/api/houses/:id/data` | 整体覆盖指定房屋数据（需登录及房屋权限） |
 | POST | `/api/upload` | 上传单张图片，返回 `/api/images/<hash>.<ext>` URL |
 | POST | `/api/ai/recognize-item` | 识别已上传的物品主图并返回建议字段（需登录及 AI 环境变量） |
+| POST | `/api/ai/assistant` | 智能语音/文本查找助理，模糊检索及推理纠错物品位置（需登录及 AI 环境变量） |
+| POST | `/api/ai/tts` | 文本转语音代理接口，可对接外部 VoxCPM 服务实现声音克隆（需登录） |
 | GET | `/api/images/<file>` | 访问已上传的图片 |
 
 ### 结构化查询 API（为 AI 智能化预留）
