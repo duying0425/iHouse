@@ -17,6 +17,11 @@ import {
 import { runAssistant } from "./ai-assistant.js";
 import { synthesizeSpeech, getTtsConfig } from "./ai-tts.js";
 import {
+  getSpeechTranscriptionConfig,
+  SpeechTranscriptionError,
+  transcribeSpeech,
+} from "./ai-transcription.js";
+import {
   buildSummary,
   listAreas,
   getAreaById,
@@ -122,6 +127,12 @@ const requireAuth = createAuthMiddleware(db);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 256 * 1024 * 1024 },
+});
+
+// 移动端语音转写只接受短录音，避免音频上传占用过多内存。
+const speechUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024, files: 1 },
 });
 
 // extractBase64Images is imported from ./utils.js
@@ -339,6 +350,100 @@ app.post("/api/ai/recognize-item", requireAuth, async (req, res) => {
       ok: false,
       error: "AI 识别失败，请稍后重试",
       code: "AI_RECOGNITION_FAILED",
+    });
+  }
+});
+
+// 返回浏览器可安全获知的语音能力，不下发 STT 地址和密钥。
+app.get("/api/ai/speech-config", requireAuth, (_req, res) => {
+  try {
+    res.json({
+      ok: true,
+      transcriptionEnabled: !!getSpeechTranscriptionConfig(),
+    });
+  } catch (error) {
+    if (error instanceof SpeechTranscriptionError) {
+      return res.status(error.status).json({
+        ok: false,
+        transcriptionEnabled: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+    throw error;
+  }
+});
+
+const AUDIO_EXTENSION_BY_TYPE = new Map([
+  ["audio/webm", "webm"],
+  ["audio/mp4", "m4a"],
+  ["audio/mpeg", "mp3"],
+  ["audio/wav", "wav"],
+  ["audio/x-wav", "wav"],
+  ["audio/ogg", "ogg"],
+]);
+
+function acceptSpeechUpload(req, res, next) {
+  speechUpload.single("file")(req, res, (error) => {
+    if (!error) return next();
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        ok: false,
+        error: "录音文件过大，请将单次录音控制在 30 秒以内",
+        code: "AUDIO_TOO_LARGE",
+      });
+    }
+    console.error("[AI speech] 录音上传失败:", error);
+    return res.status(400).json({
+      ok: false,
+      error: "录音上传失败，请重新录制",
+      code: "AUDIO_UPLOAD_FAILED",
+    });
+  });
+}
+
+// 安卓等移动端优先使用可控的服务端转写，避免依赖浏览器厂商的在线识别服务。
+app.post("/api/ai/transcribe", requireAuth, acceptSpeechUpload, async (req, res) => {
+  try {
+    if (!req.file?.buffer?.length) {
+      return res.status(400).json({
+        ok: false,
+        error: "没有收到录音内容",
+        code: "EMPTY_AUDIO",
+      });
+    }
+
+    const mimeType = String(req.file.mimetype || "").toLowerCase().split(";")[0];
+    const extension = AUDIO_EXTENSION_BY_TYPE.get(mimeType);
+    if (!extension) {
+      return res.status(415).json({
+        ok: false,
+        error: "当前录音格式不受支持，请更换浏览器后重试",
+        code: "UNSUPPORTED_AUDIO_FORMAT",
+      });
+    }
+
+    const text = await transcribeSpeech(req.file.buffer, {
+      mimeType,
+      filename: `speech.${extension}`,
+    });
+    return res.json({ ok: true, text });
+  } catch (error) {
+    if (error instanceof SpeechTranscriptionError) {
+      if (error.status >= 500) {
+        console.error(`[AI speech] ${error.code}: ${error.message}`);
+      }
+      return res.status(error.status).json({
+        ok: false,
+        error: error.message,
+        code: error.code,
+      });
+    }
+    console.error("[AI speech] 未预期错误:", error);
+    return res.status(500).json({
+      ok: false,
+      error: "语音转写失败，请稍后重试",
+      code: "SPEECH_TRANSCRIPTION_FAILED",
     });
   }
 });

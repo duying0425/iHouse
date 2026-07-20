@@ -97,9 +97,13 @@ pnpm dev
 | `AI_API_KEY` | 无 | AI 服务密钥，仅后端读取，不会发送到浏览器 |
 | `AI_MODEL` | `openai/gpt-5.6-sol` | 图片识别模型 ID |
 | `AI_TIMEOUT_MS` | `60000` | 单次 AI 识别超时（5000-120000 毫秒） |
+| `STT_API_URL` | 无 | 可选：OpenAI 兼容语音转写服务地址；配置后安卓优先使用服务端转写 |
+| `STT_API_KEY` | 无 | 可选：语音转写服务密钥，仅后端读取 |
+| `STT_MODEL` | `whisper-1` | 语音转写模型 ID |
+| `STT_TIMEOUT_MS` | `60000` | 单次语音转写超时（5000-120000 毫秒） |
 | `TURNSTILE_SITE_KEY` | 无 | 可选：Cloudflare Turnstile 站点密钥（前端显示验证组件使用） |
 | `TURNSTILE_SECRET_KEY` | 无 | 可选：Cloudflare Turnstile 机密密钥（后端校验使用） |
-| `TURNSTILE_VERIFY_URL` | `https://challenges.cloudflare.com/turnstile/v0/siteverify` | 可选：人机验证校验接口（适合国内使用反向代理/镜像） |
+| `TURNSTILE_VERIFY_URL` | `https://challenges.cloudflare.com/turnstile/v0/siteverify` | 可选：仅覆盖服务端 token 校验地址，不影响浏览器端挑战加载 |
 
 ```bash
 # 示例：自定义端口和数据目录
@@ -134,6 +138,8 @@ AI_MODEL=openai/gpt-5.6-sol
 | POST | `/api/upload` | 上传单张图片，返回 `/api/images/<hash>.<ext>` URL |
 | POST | `/api/ai/recognize-item` | 识别已上传的物品主图并返回建议字段（需登录及 AI 环境变量） |
 | POST | `/api/ai/assistant` | 智能语音/文本查找助理，模糊检索及推理纠错物品位置（需登录及 AI 环境变量） |
+| GET | `/api/ai/speech-config` | 查询当前是否启用服务端语音转写（需登录，不返回密钥） |
+| POST | `/api/ai/transcribe` | 上传短录音并调用 OpenAI 兼容接口转写文字（需登录及 STT 环境变量） |
 | POST | `/api/ai/tts` | 文本转语音代理接口，可对接外部 VoxCPM 服务实现声音克隆（需登录） |
 | GET | `/api/images/<file>` | 访问已上传的图片 |
 

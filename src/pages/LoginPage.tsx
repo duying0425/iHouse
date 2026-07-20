@@ -10,13 +10,20 @@ interface TurnstileObject {
     container: HTMLElement,
     options: {
       sitekey: string;
+      size?: "normal" | "flexible" | "compact";
       callback: (token: string) => void;
       "expired-callback"?: () => void;
-      "error-callback"?: () => void;
+      "error-callback"?: (errorCode: string) => boolean | void;
+      "timeout-callback"?: () => void;
+      "unsupported-callback"?: () => void;
+      retry?: "auto" | "never";
+      "retry-interval"?: number;
+      "refresh-expired"?: "auto" | "manual" | "never";
+      "refresh-timeout"?: "auto" | "manual" | "never";
     }
   ) => string;
   remove: (widgetId: string) => void;
-  reset: () => void;
+  reset: (widgetId?: string) => void;
 }
 
 export default function LoginPage() {
@@ -33,6 +40,9 @@ export default function LoginPage() {
   const [turnstileConfig, setTurnstileConfig] = useState({ enabled: false, siteKey: "" });
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const turnstileContainerRef = useRef<HTMLDivElement>(null);
+  const [turnstileStatus, setTurnstileStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [turnstileError, setTurnstileError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     fetch("/api/auth/config")
@@ -47,79 +57,129 @@ export default function LoginPage() {
 
   useEffect(() => {
     setTurnstileToken(null);
-    if (!turnstileConfig.enabled) return;
-
-    const scriptId = "cf-turnstile-script";
-    let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-    if (!script) {
-      script = document.createElement("script");
-      script.id = scriptId;
-      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
-      script.async = true;
-      script.defer = true;
-      document.body.appendChild(script);
+    setTurnstileError(null);
+    if (!turnstileConfig.enabled) {
+      setTurnstileStatus("idle");
+      return;
     }
 
+    setTurnstileStatus("loading");
+
     let widgetId: string | null = null;
+    let isCleanedUp = false;
+    let script = document.getElementById("cf-turnstile-script") as HTMLScriptElement | null;
+
+    const showWidgetError = (message: string) => {
+      if (isCleanedUp) return;
+      setTurnstileToken(null);
+      setTurnstileError(message);
+      setTurnstileStatus("error");
+    };
+
     const renderWidget = () => {
+      if (isCleanedUp) return;
       const turnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
-      if (turnstile && turnstileContainerRef.current) {
-        if (widgetId !== null) {
-          try {
-            turnstile.remove(widgetId);
-          } catch {
-            // ignore
-          }
-        }
+      if (!turnstile || !turnstileContainerRef.current) return;
+
+      try {
         widgetId = turnstile.render(turnstileContainerRef.current, {
           sitekey: turnstileConfig.siteKey,
+          size: "flexible",
+          retry: "auto",
+          "retry-interval": 8000,
+          "refresh-expired": "auto",
+          "refresh-timeout": "auto",
           callback: (token: string) => {
             setTurnstileToken(token);
+            setTurnstileError(null);
+            setTurnstileStatus("ready");
           },
           "expired-callback": () => {
             setTurnstileToken(null);
+            setTurnstileStatus("ready");
           },
-          "error-callback": () => {
-            setTurnstileToken(null);
+          "timeout-callback": () => {
+            showWidgetError("安全验证等待操作超时，请重新加载后再试");
+          },
+          "unsupported-callback": () => {
+            showWidgetError("当前浏览器不支持安全验证，请升级或更换浏览器");
+          },
+          "error-callback": (errorCode: string) => {
+            console.error("Turnstile widget error:", errorCode);
+            const family = Number.parseInt(errorCode, 10);
+            const message = Number.isFinite(family) && Math.floor(family / 1000) === 110
+              ? "安全验证配置异常，请联系管理员检查站点域名和密钥"
+              : "当前网络或浏览器无法连接安全验证服务，请切换网络后重试";
+            showWidgetError(message);
+            return true;
           },
         });
+        // render 成功说明 iframe 已挂载；token 仍只由 callback 标记为通过。
+        setTurnstileStatus("ready");
+      } catch (err) {
+        console.error("Turnstile render error:", err);
+        showWidgetError("安全验证初始化失败，请重新加载后再试");
       }
     };
 
-    const turnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
-    if (turnstile) {
-      const timer = setTimeout(renderWidget, 100);
-      return () => {
-        clearTimeout(timer);
-        if (widgetId !== null && turnstile) {
-          try {
-            turnstile.remove(widgetId);
-          } catch {
-            // ignore
-          }
-        }
-      };
+    const handleScriptLoad = () => {
+      if (script) script.dataset.loadState = "loaded";
+      renderWidget();
+    };
+    const handleScriptError = () => {
+      if (script) script.dataset.loadState = "error";
+      showWidgetError("安全验证脚本加载失败，请检查网络、广告拦截器或 DNS 设置");
+    };
+
+    const existingTurnstile = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
+    if (existingTurnstile) {
+      renderWidget();
     } else {
-      const interval = setInterval(() => {
-        const turnstileLoop = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
-        if (turnstileLoop) {
-          clearInterval(interval);
-          renderWidget();
-        }
-      }, 100);
-      return () => {
-        clearInterval(interval);
+      // 只有明确加载失败的 script 才重新创建；已加载的全局对象不会被删除。
+      if (script?.dataset.loadState === "error") {
+        script.remove();
+        script = null;
+      }
+      if (!script) {
+        script = document.createElement("script");
+        script.id = "cf-turnstile-script";
+        script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+        script.async = true;
+        script.defer = true;
+        script.dataset.loadState = "loading";
+        script.addEventListener("load", handleScriptLoad);
+        script.addEventListener("error", handleScriptError);
+        document.body.appendChild(script);
+      } else {
+        script.addEventListener("load", handleScriptLoad);
+        script.addEventListener("error", handleScriptError);
+      }
+    }
+
+    // 移动网络留出更合理的加载时间，同时避免永远停在 loading。
+    const loadTimeout = window.setTimeout(() => {
+      if (widgetId === null) {
+        showWidgetError("安全验证加载超时，请切换网络后重新加载");
+      }
+    }, 15_000);
+
+    return () => {
+      isCleanedUp = true;
+      window.clearTimeout(loadTimeout);
+      script?.removeEventListener("load", handleScriptLoad);
+      script?.removeEventListener("error", handleScriptError);
+      if (widgetId !== null) {
         const turnstileCleanup = (window as unknown as { turnstile?: TurnstileObject }).turnstile;
-        if (widgetId !== null && turnstileCleanup) {
+        if (turnstileCleanup) {
           try {
             turnstileCleanup.remove(widgetId);
           } catch {
             // ignore
           }
         }
-      };
-    }
-  }, [turnstileConfig, mode]);
+      }
+    };
+  }, [turnstileConfig, mode, retryCount]);
 
   // 登录成功后跳转到来源页或房屋列表
   const redirectTo = (location.state as { from?: string } | null)?.from || "/houses";
@@ -249,8 +309,31 @@ export default function LoginPage() {
           </label>
 
           {turnstileConfig.enabled && (
-            <div className="flex justify-center my-2">
-              <div ref={turnstileContainerRef} />
+            <div className="my-2 border border-line rounded bg-paper/50 p-2 text-center min-h-[85px] flex flex-col items-center justify-center transition-all duration-300">
+              <div
+                ref={turnstileContainerRef}
+                className={`${turnstileStatus === "ready" ? "block" : "hidden"} w-full flex justify-center`}
+              />
+
+              {turnstileStatus === "loading" && (
+                <div className="flex flex-col items-center gap-1.5 py-1 text-ink/65 text-2xs animate-pulse">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-clay-500 border-t-transparent" />
+                  <span>正在加载安全验证...</span>
+                </div>
+              )}
+
+              {turnstileStatus === "error" && (
+                <div className="flex flex-col items-center gap-2 py-1 text-ochre text-2xs">
+                  <span>{turnstileError || "安全验证加载失败，请稍后重试"}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRetryCount((prev) => prev + 1)}
+                    className="px-3 py-1 rounded bg-ochre/10 hover:bg-ochre/20 text-ochre font-medium border border-ochre/20 active:scale-95 transition-all"
+                  >
+                    重新加载
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

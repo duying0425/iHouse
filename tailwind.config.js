@@ -61,11 +61,21 @@ export default {
           "0%": { opacity: "0" },
           "100%": { opacity: "1" },
         },
+        slideUp: {
+          "0%": { opacity: "0", transform: "translateY(24px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        slideLeft: {
+          "0%": { opacity: "0", transform: "translateX(24px)" },
+          "100%": { opacity: "1", transform: "translateX(0)" },
+        },
       },
       animation: {
         pulseRing: "pulseRing 2s ease-out infinite",
         fadeUp: "fadeUp 0.5s ease-out both",
         fadeIn: "fadeIn 0.4s ease-out both",
+        slideUp: "slideUp 0.25s ease-out both",
+        slideLeft: "slideLeft 0.25s ease-out both",
       },
     },
   },

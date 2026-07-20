@@ -36,6 +36,12 @@ AI_API_KEY=replace-with-your-api-key
 AI_MODEL=openai/gpt-5.6-sol
 AI_TIMEOUT_MS=60000
 
+# 可选：移动端语音转写，支持 OpenAI 兼容的 /v1/audio/transcriptions
+# STT_API_URL=https://your-stt-api.example.com
+# STT_API_KEY=replace-with-your-stt-api-key
+# STT_MODEL=whisper-1
+# STT_TIMEOUT_MS=60000
+
 # 如果供应商只提供完整地址，可改用下列配置；它优先于 BASE_URL
 # AI_API_URL=https://your-ai-api.example.com/v1/chat/completions
 ```
@@ -133,12 +139,26 @@ docker compose logs --tail=200 ihouse
 TURNSTILE_SITE_KEY=你的站点密钥(Site Key)
 TURNSTILE_SECRET_KEY=你的机密密钥(Secret Key)
 
-# 可选：如果服务器部署在大陆等访问 Cloudflare siteverify 接口困难的环境，
-# 可以通过配置本变量使用反向代理/国内镜像接口。
+# 可选：仅覆盖服务端 siteverify 地址，不改变浏览器加载挑战所使用的 Cloudflare 地址。
 # TURNSTILE_VERIFY_URL=https://challenges.cloudflare.com/turnstile/v0/siteverify
 ```
 
 保存并使用 `docker compose up -d --force-recreate` 重启容器。重启后，前端注册与登录界面将自动显示 Turnstile 人机验证块，后端也将开始对注册与登录 Token 进行强校验。
+
+> 注意：Turnstile 浏览器端仍必须直接连接 `challenges.cloudflare.com`。如果主要用户位于中国大陆或受限网络，应改用当地稳定可访问的验证服务；`TURNSTILE_VERIFY_URL` 不能解决浏览器端组件无法加载的问题。
+
+## 4.6 配置移动端语音转写
+
+安卓 Edge/Chrome 的浏览器原生语音识别可能不可用，或依赖浏览器厂商的在线服务。可配置 OpenAI 兼容的语音转写接口：
+
+```env
+STT_API_URL=https://your-stt-api.example.com
+STT_API_KEY=replace-with-your-stt-api-key
+STT_MODEL=whisper-1
+STT_TIMEOUT_MS=60000
+```
+
+`STT_API_URL` 可填写服务根地址、以 `/v1` 结尾的地址，或完整的 `/v1/audio/transcriptions` 地址。配置后，移动端会优先使用“浏览器录音 → iHouse 后端 → STT 服务”的路径；PC 端仍优先使用响应更快的浏览器原生识别。录音仅在用户点击麦克风后采集，单次最长 30 秒、上传上限 15MB，关闭聊天面板会立即停止录音。除 `localhost` 外，浏览器采集麦克风必须使用 HTTPS；通过手机访问 NAS 的 `http://局域网IP:端口` 不满足条件。
 
 ## 5. 端口、防火墙与 HTTPS
 
