@@ -8,6 +8,7 @@ import { useAuthStore } from "@/authStore";
 import VoiceAssistant from "@/components/VoiceAssistant";
 import { countItems } from "@/data/seed";
 import { CATEGORIES, CATEGORY_COLOR, type Area, type Item } from "@/types";
+import { cn } from "@/lib/utils";
 import {
   getMaintenanceStatus,
   isMaintenanceAlert,
@@ -143,6 +144,7 @@ export default function HomePage() {
               floorPlanImage={floorPlanImage}
               highlightAreaId={hoverArea}
               onAreaClick={(id) => navigate(`/area/${id}`)}
+              onAreaHover={setHoverArea}
             />
             <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line pt-3 text-2xs text-ink/45">
               <span>● 序号锚点：区域入口，点击进入</span>
@@ -165,7 +167,12 @@ export default function HomePage() {
                   onMouseEnter={() => setHoverArea(a.id)}
                   onMouseLeave={() => setHoverArea(undefined)}
                   onClick={() => navigate(`/area/${a.id}`)}
-                  className="card group flex items-center gap-3 p-3 text-left hover:-translate-y-0.5 hover:shadow-cardHover"
+                  className={cn(
+                    "card group flex items-center gap-3 p-3 text-left transition-all",
+                    hoverArea === a.id
+                      ? "border-clay-400 bg-clay-50/50 -translate-y-0.5 shadow-cardHover"
+                      : "hover:-translate-y-0.5 hover:shadow-cardHover"
+                  )}
                 >
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-moss font-display text-sm font-semibold text-cream">
                     {idx + 1}

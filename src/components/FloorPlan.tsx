@@ -48,10 +48,31 @@ interface FloorPlanProps {
   compact?: boolean;
   className?: string;
   style?: CSSProperties;
+  onAreaHover?: (areaId?: string) => void;
 }
 
 const pctToX = (p: number) => (p / 100) * VB_W;
 const pctToY = (p: number) => (p / 100) * VB_H;
+
+const isInsideBounds = (p: AnchorPosition, b: Bounds) => {
+  return p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h;
+};
+
+const isOverAnchor = (
+  p: AnchorPosition,
+  anchor: AnchorPosition,
+  compact: boolean
+) => {
+  const px = (p.x / 100) * VB_W;
+  const py = (p.y / 100) * VB_H;
+  const ax = (anchor.x / 100) * VB_W;
+  const ay = (anchor.y / 100) * VB_H;
+  const dx = px - ax;
+  const dy = py - ay;
+  const r = compact ? 9 : 14;
+  const hoverR = r + 6; // padding for easy hovering
+  return dx * dx + dy * dy <= hoverR * hoverR;
+};
 
 const MIN_SIZE = 2; // bounds 最小宽高（百分比）
 
@@ -114,6 +135,7 @@ export default function FloorPlan({
   compact = false,
   className,
   style,
+  onAreaHover,
 }: FloorPlanProps) {
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -122,6 +144,10 @@ export default function FloorPlan({
   const dragPosRef = useRef<AnchorPosition | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragPos, setDragPos] = useState<AnchorPosition | null>(null);
+  
+  // Hover state for area highlighting & tooltips
+  const [hoveredAreaId, setHoveredAreaId] = useState<string | undefined>();
+  const [tooltipPos, setTooltipPos] = useState<AnchorPosition | null>(null);
 
   // bounds 拖拽：与锚点拖拽互斥（同一时间只进行一种）
   const dragBoundsIdRef = useRef<string | null>(null);
@@ -216,10 +242,63 @@ export default function FloorPlan({
         if (!p) return;
         dragPosRef.current = p;
         setDragPos(p);
+        return;
+      }
+
+      // 仅在非编辑模式下触发 Hover 检测
+      if (!editable && !boundsEditable && !pickable) {
+        const p = toPct(e.clientX, e.clientY);
+        if (p) {
+          let nextHoveredId: string | undefined = undefined;
+
+          // 1. 优先检测是否悬停在锚点上
+          for (let i = 0; i < areas.length; i++) {
+            const a = areas[i];
+            if (showAreaAnchors && isOverAnchor(p, a.floorPlanPos, compact)) {
+              nextHoveredId = a.id;
+              break;
+            }
+          }
+
+          // 2. 其次检测是否在矩形区域 bounds 内
+          if (!nextHoveredId) {
+            const candidates = areas.filter(
+              (a) => a.bounds && isInsideBounds(p, a.bounds)
+            );
+            if (candidates.length > 0) {
+              // 按面积从小到大排序，重叠时优先高亮小区域
+              candidates.sort((a, b) => {
+                const sizeA = (a.bounds?.w || 0) * (a.bounds?.h || 0);
+                const sizeB = (b.bounds?.w || 0) * (b.bounds?.h || 0);
+                return sizeA - sizeB;
+              });
+              nextHoveredId = candidates[0].id;
+            }
+          }
+
+          if (nextHoveredId !== hoveredAreaId) {
+            setHoveredAreaId(nextHoveredId);
+            onAreaHover?.(nextHoveredId);
+          }
+
+          if (nextHoveredId) {
+            setTooltipPos(p);
+          } else {
+            setTooltipPos(null);
+          }
+        }
       }
     },
-    [toPct]
+    [toPct, editable, boundsEditable, pickable, areas, showAreaAnchors, compact, hoveredAreaId, onAreaHover]
   );
+
+  const handlePointerLeave = useCallback(() => {
+    if (!editable && !boundsEditable && !pickable) {
+      setHoveredAreaId(undefined);
+      setTooltipPos(null);
+      onAreaHover?.(undefined);
+    }
+  }, [editable, boundsEditable, pickable, onAreaHover]);
 
   const endDrag = useCallback(() => {
     // bounds 拖拽结束
@@ -249,8 +328,11 @@ export default function FloorPlan({
   }, [onAreaMove, onAreaBoundsChange]);
 
   const areaFill = useMemo(
-    () => (id: string) => (id === highlightAreaId ? "#EFD9C4" : "#FBF8F2"),
-    [highlightAreaId]
+    () => (id: string) => {
+      const isHi = id === highlightAreaId || id === hoveredAreaId;
+      return isHi ? "#EFD9C4" : "#FBF8F2";
+    },
+    [highlightAreaId, hoveredAreaId]
   );
 
   /** 8 个把手列表 */
@@ -303,6 +385,7 @@ export default function FloorPlan({
         )}
         onClick={handlePick}
         onPointerMove={handlePointerMove}
+        onPointerLeave={handlePointerLeave}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
         role="img"
@@ -329,7 +412,7 @@ export default function FloorPlan({
               const y = pctToY(a.bounds.y);
               const w = pctToX(a.bounds.w);
               const h = pctToY(a.bounds.h);
-              const isHi = a.id === highlightAreaId;
+              const isHi = a.id === highlightAreaId || a.id === hoveredAreaId;
               return (
                 <g key={a.id}>
                   <rect
@@ -475,7 +558,7 @@ export default function FloorPlan({
             - 内置模式下非编辑时已由上方房间矩形渲染；编辑时统一在此渲染带把手
             - 拖拽中跟随本地 state */}
         {areas.map((a) => {
-          const isHi = a.id === highlightAreaId;
+          const isHi = a.id === highlightAreaId || a.id === hoveredAreaId;
           const isEditable = boundsEditable === true || boundsEditable === a.id;
           // 非编辑状态下，只有处于图片模式且被高亮时，才显示半透明矩形作为高亮效果
           if (!isEditable && (!isHi || !isImageMode)) return null;
@@ -554,7 +637,7 @@ export default function FloorPlan({
             const pos = isDragging && dragPos ? dragPos : a.floorPlanPos;
             const cx = pctToX(pos.x);
             const cy = pctToY(pos.y);
-            const isHi = a.id === highlightAreaId;
+            const isHi = a.id === highlightAreaId || a.id === hoveredAreaId;
             return (
               <g
                 key={`anchor-${a.id}`}
@@ -614,6 +697,30 @@ export default function FloorPlan({
             );
           })}
       </svg>
+
+      {/* 悬停信息气泡 (Tooltip) */}
+      {(() => {
+        const activeId = highlightAreaId || hoveredAreaId;
+        const hoveredArea = areas.find((a) => a.id === activeId);
+        if (!tooltipPos || !hoveredArea) return null;
+        return (
+          <div
+            className="absolute z-50 pointer-events-none bg-ink/95 text-cream text-2xs rounded-lg px-2.5 py-1.5 shadow-lg backdrop-blur-sm flex flex-col gap-0.5 border border-line/20 transition-[left,top] duration-75 ease-out"
+            style={{
+              left: `${Math.max(8, Math.min(92, tooltipPos.x))}%`,
+              top: `${tooltipPos.y}%`,
+              transform: tooltipPos.y < 15 ? "translate(-50%, 25%)" : "translate(-50%, -125%)",
+            }}
+          >
+            <span className="font-serif font-semibold text-xs tracking-wide">
+              {hoveredArea.name}
+            </span>
+            <span className="opacity-75 text-[10px]">
+              {hoveredArea.items?.length || 0} 件物品
+            </span>
+          </div>
+        );
+      })()}
     </div>
   );
 }
