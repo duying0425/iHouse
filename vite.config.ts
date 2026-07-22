@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tsconfigPaths from "vite-tsconfig-paths";
-import { traeBadgePlugin } from 'vite-plugin-trae-solo-badge';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -29,15 +28,6 @@ export default defineConfig({
     // <image href> 时，删除区域引发的列表 diff 会让浮层 reconciliation
     // 超出最大更新深度 (React #185) 而崩溃。移除后浮层不再扫描，问题消失。
     react(),
-    traeBadgePlugin({
-      variant: 'dark',
-      position: 'bottom-right',
-      prodOnly: true,
-      clickable: true,
-      clickUrl: 'https://www.trae.ai/solo?showJoin=1',
-      autoTheme: true,
-      autoThemeTarget: '#root'
-    }),
     tsconfigPaths()
   ],
 })
