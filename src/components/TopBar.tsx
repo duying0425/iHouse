@@ -9,6 +9,7 @@ import {
   Plus,
   Search,
   Settings,
+  User,
 } from "lucide-react";
 import { useHomeStore } from "@/store";
 import { useAuthStore } from "@/authStore";
@@ -244,6 +245,17 @@ export default function TopBar({
                         </button>
                       </li>
                     )}
+                    <li>
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          navigate("/account");
+                        }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-ink hover:bg-clay-50"
+                      >
+                        <User size={14} /> 账户与反馈
+                      </button>
+                    </li>
                     <li className="border-t border-line">
                       <button
                         onClick={handleLogout}

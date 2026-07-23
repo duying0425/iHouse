@@ -7,7 +7,7 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { LogIn, X } from "lucide-react";
+import { LogIn, MessageCircle, X } from "lucide-react";
 import HomePage from "@/pages/HomePage";
 import SearchPage from "@/pages/SearchPage";
 import AreaDetailPage from "@/pages/AreaDetailPage";
@@ -15,6 +15,7 @@ import ItemFormPage from "@/pages/ItemFormPage";
 import ItemDetailPage from "@/pages/ItemDetailPage";
 import ExportPage from "@/pages/ExportPage";
 import SetupPage from "@/pages/SetupPage";
+import AccountPage from "@/pages/AccountPage";
 import LoginPage from "@/pages/LoginPage";
 import HousesPage from "@/pages/HousesPage";
 import HouseSettingsPage from "@/pages/HouseSettingsPage";
@@ -81,6 +82,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<HomePage />} />
           <Route path="/setup" element={<SetupPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/area/:areaId" element={<AreaDetailPage />} />
           <Route path="/area/:areaId/item/new" element={<ItemFormPage />} />
@@ -122,6 +124,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/setup" element={<SetupPage />} />
+        <Route path="/account" element={<AccountPage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/area/:areaId" element={<AreaDetailPage />} />
         <Route path="/area/:areaId/item/new" element={<ItemFormPage />} />
@@ -157,6 +160,13 @@ function DemoBanner() {
         演示模式 · 当前为示例数据，登录后可保存你自己的房屋数据
       </p>
       <div className="flex shrink-0 items-center gap-2">
+        <button
+          onClick={() => navigate("/account")}
+          className="flex items-center gap-1 rounded px-2.5 py-1 text-2xs font-medium text-cream/90 hover:bg-clay-600"
+          title="反馈与联系方式"
+        >
+          <MessageCircle size={12} /> 反馈
+        </button>
         <button
           onClick={() => navigate("/login")}
           className="rounded bg-cream px-2.5 py-1 text-2xs font-medium text-clay-600 hover:bg-cream/90"
