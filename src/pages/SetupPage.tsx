@@ -6,10 +6,13 @@ import {
   ChevronRight,
   Crop,
   Download,
+  Github,
   GripVertical,
   ImageUp,
   Images,
   Loader2,
+  Mail,
+  MessageCircle,
   Plus,
   RotateCcw,
   Save,
@@ -614,6 +617,9 @@ export default function SetupPage() {
 
           {/* 账户安全：修改密码 */}
           <AccountSecurityCard />
+
+          {/* 关于与反馈 */}
+          <AboutCard />
         </aside>
       </div>
     </PageLayout>
@@ -718,6 +724,52 @@ function AccountSecurityCard() {
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           修改密码
         </button>
+      </div>
+    </div>
+  );
+}
+
+/** 关于与反馈：作者联系方式 */
+function AboutCard() {
+  const [qrError, setQrError] = useState(false);
+  return (
+    <div className="card p-4">
+      <div className="mb-3 flex items-center gap-1.5 font-serif text-sm font-semibold text-ink">
+        <MessageCircle size={14} /> 关于与反馈
+      </div>
+      <p className="mb-3 text-2xs text-ink/55">
+        iHouse · 居所图鉴。遇到问题或建议欢迎联系作者：
+      </p>
+      <div className="space-y-2 text-2xs">
+        <a
+          href="mailto:duying0425@163.com"
+          className="flex items-center gap-2 text-ink/75 hover:text-clay-500"
+        >
+          <Mail size={13} /> dlying0425@163.com
+        </a>
+        <a
+          href="https://github.com/duying0425/iHouse/issues"
+          target="_blank"
+          rel="noreferrer"
+          className="flex items-center gap-2 text-ink/75 hover:text-clay-500"
+        >
+          <Github size={13} /> GitHub Issues
+        </a>
+      </div>
+      <div className="mt-3 flex flex-col items-center gap-1.5">
+        {qrError ? (
+          <div className="flex h-32 w-32 items-center justify-center rounded border border-line bg-ink/5 text-center text-2xs text-ink/40">
+            二维码未配置
+          </div>
+        ) : (
+          <img
+            src="/wechat-qr.png"
+            alt="作者微信二维码"
+            className="h-32 w-32 rounded border border-line object-contain"
+            onError={() => setQrError(true)}
+          />
+        )}
+        <p className="text-2xs text-ink/45">扫码加作者微信</p>
       </div>
     </div>
   );

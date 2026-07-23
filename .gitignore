@@ -40,3 +40,6 @@ server/pnpm-lock.yaml
 
 # 临时 QA 脚本与本地调试产物
 tmp/
+
+# 作者个人微信二维码（隐私信息，部署时手动上传到 public/）
+public/wechat-qr.png
